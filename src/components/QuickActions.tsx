@@ -2,6 +2,7 @@ import { FC } from 'react';
 import { Camera, Mic, ShoppingCart, Info } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useToast } from '../context/ToastContext';
+import { useTranslation } from '../context/TranslationContext';
 
 interface QuickActionsProps {
   onScan: () => void;
@@ -11,15 +12,16 @@ interface QuickActionsProps {
 
 export const QuickActions: FC<QuickActionsProps> = ({ onScan, onVoice, isSunlightMode }) => {
   const { showToast } = useToast();
+  const { t } = useTranslation();
 
-  const handleComingSoon = (feature: string) => {
-    showToast(`${feature} is under development for Phase 2`, 'info');
+  const handleComingSoon = (featureKey: string) => {
+    showToast(`${t(featureKey)}: ${t('coming_soon')}`, 'info');
   };
 
   const actions = [
     { 
       id: 'scan',
-      label: 'Scan Plant', 
+      label: t('scan_plant'), 
       sub: 'AI Diagnosis',
       icon: Camera, 
       color: 'bg-emerald-600',
@@ -27,7 +29,7 @@ export const QuickActions: FC<QuickActionsProps> = ({ onScan, onVoice, isSunligh
     },
     { 
       id: 'voice',
-      label: 'Voice Help', 
+      label: t('voice_help'), 
       sub: 'Talk to AI',
       icon: Mic, 
       color: 'bg-amber-500',
@@ -35,19 +37,19 @@ export const QuickActions: FC<QuickActionsProps> = ({ onScan, onVoice, isSunligh
     },
     { 
       id: 'mandi',
-      label: 'Mandi Prices', 
+      label: t('mandi_prices'), 
       sub: 'Live Rates',
       icon: ShoppingCart, 
       color: 'bg-blue-600',
-      action: () => handleComingSoon('Mandi Prices')
+      action: () => handleComingSoon('mandi_prices')
     },
     { 
       id: 'advisory',
-      label: 'Advisory', 
+      label: t('advisory'), 
       sub: 'Expert Tips',
       icon: Info, 
       color: 'bg-olive-600',
-      action: () => handleComingSoon('Advisory')
+      action: () => handleComingSoon('advisory')
     },
   ];
 
@@ -75,7 +77,7 @@ export const QuickActions: FC<QuickActionsProps> = ({ onScan, onVoice, isSunligh
               {action.label}
             </span>
             <span className={`text-[10px] font-bold uppercase opacity-60 mt-1 ${isSunlightMode ? 'text-white' : ''}`}>
-              {action.sub}
+              AI ASSISTANT
             </span>
           </motion.button>
         ))}

@@ -119,7 +119,7 @@
 }
 
 /* Indic Script Font Adjustments */
-[lang="hi"], [lang="pa"], [lang="bn"], [lang="gu"], [lang="mr"], [lang="kn"], [lang="ml"], [lang="ta"], [lang="te"], [lang="as"] {
+[lang="hi"], [lang="pa"], [lang="bn"], [lang="gu"], [lang="mr"], [lang="kn"], [lang="ml"], [lang="ta"], [lang="te"], [lang="as"], [lang="bgc"] {
   line-height: 1.6;
 }
 

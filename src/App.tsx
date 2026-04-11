@@ -14,6 +14,7 @@ import { SkeletonCard } from './components/SkeletonCard';
 import { AnimatePresence } from 'framer-motion';
 import { ToastProvider } from './context/ToastContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { TranslationProvider, useTranslation } from './context/TranslationContext';
 
 export interface ChatMessage {
   role: 'user' | 'ai';
@@ -24,7 +25,7 @@ export interface ChatMessage {
 }
 
 function AppContent() {
-  const [selectedLanguage, setSelectedLanguage] = useState({ code: 'en', name: 'English' });
+  const { currentLanguage } = useTranslation();
   const [isAnalysing, setIsAnalysing] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [weatherData, setWeatherData] = useState<WeatherAlertResponse | null>(null);
@@ -71,7 +72,7 @@ function AppContent() {
     addChatMessage(userMsg);
 
     try {
-      const response = await sendMessage(text, selectedLanguage.name);
+      const response = await sendMessage(text, currentLanguage);
       addChatMessage({
         role: 'ai',
         type: 'text',
@@ -83,7 +84,7 @@ function AppContent() {
       addChatMessage({
         role: 'ai',
         type: 'text',
-        content: 'I had trouble connecting to the backend. Please check your connection.',
+        content: 'I had trouble connecting to the backend.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       });
     }
@@ -96,14 +97,14 @@ function AppContent() {
   const getBCP47Language = (code: string) => {
     const map: Record<string, string> = {
       'en': 'en-US', 'hi': 'hi-IN', 'pa': 'pa-IN', 'gu': 'gu-IN', 'mr': 'mr-IN',
-      'kn': 'kn-IN', 'ml': 'ml-IN', 'ta': 'ta-IN', 'te': 'te-IN', 'bn': 'bn-IN', 'as': 'as-IN'
+      'kn': 'kn-IN', 'ml': 'ml-IN', 'ta': 'ta-IN', 'te': 'te-IN', 'bn': 'bn-IN', 'as': 'as-IN', 'bgc': 'hi-IN'
     };
     return map[code] || 'en-US';
   };
 
   useEffect(() => {
     if (isUIActive && !isRecording) {
-      const langCode = getBCP47Language(selectedLanguage.code);
+      const langCode = getBCP47Language(currentLanguage);
       speechService.start(
         langCode,
         (text) => handleSendMessage(text),
@@ -115,7 +116,7 @@ function AppContent() {
         speechService.stop();
       }
     };
-  }, [isUIActive, isRecording, selectedLanguage]);
+  }, [isUIActive, isRecording, currentLanguage]);
 
   const onStartRecording = () => setIsUIActive(true);
   const onStopRecording = () => {
@@ -131,8 +132,6 @@ function AppContent() {
     <div className="min-h-screen bg-zinc-950 flex flex-col items-center">
       <div className="w-full max-w-md bg-zinc-950 min-h-screen flex flex-col relative shadow-2xl overflow-x-hidden pb-12">
         <Header
-          selectedLanguage={selectedLanguage}
-          setSelectedLanguage={setSelectedLanguage}
           isSunlightMode={isSunlightMode}
           setIsSunlightMode={setIsSunlightMode}
         />
@@ -179,7 +178,7 @@ function AppContent() {
               isOpen={isChatOpen}
               setIsOpen={setIsChatOpen}
               messages={chatMessages}
-              selectedLanguage={selectedLanguage}
+              selectedLanguage={{ code: currentLanguage, name: '' }}
               isUIActive={isUIActive}
               onStartRecording={onStartRecording}
               onStopRecording={onStopRecording}
@@ -197,7 +196,9 @@ function AppContent() {
 function App() {
   return (
     <ToastProvider>
-      <AppContent />
+      <TranslationProvider>
+        <AppContent />
+      </TranslationProvider>
     </ToastProvider>
   );
 }
