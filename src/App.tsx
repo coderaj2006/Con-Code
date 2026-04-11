@@ -12,6 +12,7 @@ import { weatherService } from './services/weatherService';
 import { speechService } from './services/speech';
 import { SkeletonCard } from './components/SkeletonCard';
 import { AnimatePresence } from 'framer-motion';
+import { DiagnosisDisplay, OrchestratorResponse } from './components/DiagnosisDisplay';
 import { ToastProvider } from './context/ToastContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { TranslationProvider, useTranslation } from './context/TranslationContext';
@@ -22,11 +23,14 @@ export interface ChatMessage {
   content: string;
   data?: any;
   timestamp: string;
+  follow_up_question?: string | null;
+  speech_url?: string | null;
 }
 
 function AppContent() {
   const { currentLanguage } = useTranslation();
   const [isAnalysing, setIsAnalysing] = useState(false);
+  const [diagnosisResult, setDiagnosisResult] = useState<OrchestratorResponse | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [weatherData, setWeatherData] = useState<WeatherAlertResponse | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -36,6 +40,8 @@ function AppContent() {
     return localStorage.getItem('sunlight-mode') === 'true';
   });
   const [isWeatherDataLoading, setIsWeatherDataLoading] = useState(true);
+  const [telemetryHistory, setTelemetryHistory] = useState<any[]>([]);
+  const [isSimulationMode, setIsSimulationMode] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('sunlight-mode', isSunlightMode.toString());
@@ -45,6 +51,34 @@ function AppContent() {
       document.body.classList.remove('sunlight-mode');
     }
   }, [isSunlightMode]);
+
+  // --- Backend Handshake + Telemetry Pre-warming ---
+  useEffect(() => {
+    fetch('http://localhost:8001/telemetry?farmer_id=1')
+      .then(res => {
+        if (res.ok) {
+          console.log('%c🚀 Kisaan-Sense Connected to Port 8001', 'color: #4ade80; font-size: 14px; font-weight: bold;');
+          return res.json();
+        } else {
+          console.warn('⚠️ Kisaan-Sense: Backend responded with status', res.status);
+          return null;
+        }
+      })
+      .then(data => {
+        if (data?.history?.length) {
+          // Real scan data exists — pre-warm the history state; UI updates without a refresh
+          setTelemetryHistory(data.history);
+          setIsSimulationMode(false);
+        } else {
+          // Backend returned empty history — flag simulation mode for badge display
+          setIsSimulationMode(true);
+        }
+      })
+      .catch(() => {
+        console.warn('⚠️ Kisaan-Sense: Backend not reachable on Port 8001. Is uvicorn running?');
+        setIsSimulationMode(true);
+      });
+  }, []);
 
   useEffect(() => {
     // Initial weather fetch (Delhi coordinates)
@@ -77,6 +111,8 @@ function AppContent() {
         role: 'ai',
         type: 'text',
         content: response.content,
+        follow_up_question: response.follow_up_question,
+        speech_url: response.speech_url,
         timestamp: response.timestamp
       });
     } catch (error) {
@@ -149,17 +185,27 @@ function AppContent() {
 
           <section>
             <ErrorBoundary>
+              <AnimatePresence>
+                {diagnosisResult && (
+                  <DiagnosisDisplay 
+                    result={diagnosisResult} 
+                    onClose={() => setDiagnosisResult(null)}
+                    isSunlightMode={isSunlightMode} 
+                  />
+                )}
+              </AnimatePresence>
               <QuickActions 
-                onScan={() => setIsAnalysing(true)} 
+                onScanClick={() => {}} 
                 onVoice={handleVoiceHelp} 
-                isSunlightMode={isSunlightMode} 
+                isSunlightMode={isSunlightMode}
+                setDiagnosisResult={setDiagnosisResult}
               />
             </ErrorBoundary>
           </section>
 
           <section>
             <ErrorBoundary>
-              <CropStatus isSunlightMode={isSunlightMode} />
+              <CropStatus isSunlightMode={isSunlightMode} telemetryHistory={telemetryHistory} isSimulationMode={isSimulationMode} />
             </ErrorBoundary>
           </section>
 
@@ -182,6 +228,7 @@ function AppContent() {
               isUIActive={isUIActive}
               onStartRecording={onStartRecording}
               onStopRecording={onStopRecording}
+              onSendMessage={handleSendMessage}
               isSunlightMode={isSunlightMode}
             />
           )}

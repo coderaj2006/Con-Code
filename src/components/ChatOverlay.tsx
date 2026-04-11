@@ -1,5 +1,5 @@
-import { useEffect, useRef, FC } from 'react';
-import { MessageSquare, Camera, Mic, ChevronDown } from 'lucide-react';
+import { useEffect, useRef, FC, useCallback } from 'react';
+import { MessageSquare, Camera, Mic, ChevronDown, Volume2 } from 'lucide-react';
 import { ChatMessage } from '../App';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -12,6 +12,7 @@ interface ChatOverlayProps {
   onStartRecording: () => void;
   onStopRecording: () => void;
   isSunlightMode?: boolean;
+  onSendMessage?: (text: string) => void;
 }
 
 export const ChatOverlay: FC<ChatOverlayProps> = ({
@@ -22,7 +23,8 @@ export const ChatOverlay: FC<ChatOverlayProps> = ({
   isUIActive,
   onStartRecording,
   onStopRecording,
-  isSunlightMode
+  isSunlightMode,
+  onSendMessage
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -32,22 +34,35 @@ export const ChatOverlay: FC<ChatOverlayProps> = ({
     }
   }, [messages, isOpen]);
 
-  // Speech Synthesis Logic
+  // --- Audio Playback: use backend gTTS speech_url if available ---
+  const playAudio = useCallback((url: string) => {
+    try {
+      const audio = new Audio(url);
+      audio.play().catch(() => {
+        // Audio blocked by browser autoplay policy — user must interact first
+      });
+    } catch (_e) { /* silent fail */ }
+  }, []);
+
   useEffect(() => {
     const lastMessage = messages[messages.length - 1];
-    if (lastMessage && lastMessage.role === 'ai') {
-      const textToSpeak = lastMessage.content;
-      const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    if (!lastMessage || lastMessage.role !== 'ai') return;
 
+    if (lastMessage.speech_url) {
+      // Backend gTTS MP3 — plays the regional language audio
+      playAudio(lastMessage.speech_url);
+    } else if (lastMessage.content) {
+      // Fallback: browser Web Speech API if no server audio
+      const utterance = new SpeechSynthesisUtterance(lastMessage.content);
       const voices = window.speechSynthesis.getVoices();
-      const targetLang = selectedLanguage.code === 'en' ? 'en-US' : selectedLanguage.code === 'hi' ? 'hi-IN' : selectedLanguage.code;
-
+      const targetLang = selectedLanguage.code === 'en' ? 'en-US'
+        : selectedLanguage.code === 'hi' ? 'hi-IN'
+        : selectedLanguage.code;
       const voice = voices.find(v => v.lang.startsWith(targetLang));
       if (voice) utterance.voice = voice;
-
       window.speechSynthesis.speak(utterance);
     }
-  }, [messages, selectedLanguage.code]);
+  }, [messages, selectedLanguage.code, playAudio]);
 
   return (
     <>
@@ -151,8 +166,35 @@ export const ChatOverlay: FC<ChatOverlayProps> = ({
                         </p>
                       )}
                     </div>
+                    {/* Follow-up Question Chip — rendered only on AI messages that have a suggestion */}
+                    {msg.role === 'ai' && msg.follow_up_question && onSendMessage && (
+                      <button
+                        onClick={() => onSendMessage(msg.follow_up_question!)}
+                        className={`mt-2 text-[11px] font-black uppercase tracking-wide px-3 py-1.5 rounded-full border transition-all hover:scale-105 active:scale-95 ${
+                          isSunlightMode
+                            ? 'bg-black border-neon-agri text-neon-agri hover:bg-neon-agri hover:text-black'
+                            : 'bg-white/10 border-white/20 text-white hover:bg-white/20'
+                        }`}
+                      >
+                        💬 {msg.follow_up_question}
+                      </button>
+                    )}
                     <div className="flex items-center gap-2 mt-2 px-1">
-                      <span className={`text-[10px] font-bold uppercase ${isSunlightMode ? 'text-white/40' : 'text-gray-400'}`}>{msg.role === 'ai' ? 'Kisaan AI' : 'You'} • {msg.timestamp}</span>
+                      <span className={`text-[10px] font-bold uppercase ${isSunlightMode ? 'text-white/40' : 'text-gray-400'}`}>
+                        {msg.role === 'ai' ? 'Kisaan AI' : 'You'} • {msg.timestamp}
+                      </span>
+                      {/* Replay button — only for AI messages with a speech_url */}
+                      {msg.role === 'ai' && msg.speech_url && (
+                        <button
+                          onClick={() => playAudio(msg.speech_url!)}
+                          title="Replay audio"
+                          className={`p-1 rounded-full transition-all hover:scale-110 active:scale-95 ${
+                            isSunlightMode ? 'text-neon-agri hover:bg-white/10' : 'text-white/50 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          <Volume2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </motion.div>
                 ))}

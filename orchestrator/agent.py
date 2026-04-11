@@ -1,6 +1,9 @@
 import json
+import asyncio
+import io
 import google.generativeai as genai
 from pydantic import BaseModel
+from PIL import Image
 from config import config
 from tools.weather import get_weather
 from tools.rag import search_agri_knowledge
@@ -8,98 +11,107 @@ from tools.rag import search_agri_knowledge
 # Ensure Gemini API Key is configured
 genai.configure(api_key=config.GEMINI_API_KEY)
 
-class Diagnosis(BaseModel):
-    crop_type: str
-    issue: str
-    confidence: str
-    urgency: str
-
-class ActionPlan(BaseModel):
-    immediate_remedy: str
-    chemical_option: str
-    prevention: str
-
-class AgentResponse(BaseModel):
-    diagnosis: Diagnosis
-    environmental_context: str
-    action_plan: ActionPlan
-    localized_audio_script: str
-
-def run_analysis_workflow(image_url: str, lat: float, lon: float, preferred_language: str) -> dict:
+async def run_analysis_workflow(image_bytes: bytes, user_text: str, lat: float, lon: float, preferred_language: str) -> dict:
     """
-    Real implementation of the Antigravity Master Agent Workflow using Gemini.
+    Multi-modal Antigravity Master Agent Workflow via Gemini.
     """
     model = genai.GenerativeModel('gemini-2.5-flash')
     
     # 1. Vision & Reasoning Task
-    vision_prompt = f"""
+    vision_prompt = """
     You are an expert AI Agricultural Botanist.
-    Analyze this crop image URL (or assume it's a crop if evaluating text for now): {image_url}
-    Identify the crop type and any visible diseases or pests.
-    Return ONLY a JSON formatted string according to this structure (no markdown fences):
-    {{"crop_type": "string", "issue": "string", "confidence": "float from 0.0 to 100.0"}}
+    Analyze this crop image. Describe exactly what you see: crop type (if discernable), symptoms (spots, yellowing, etc.), pest presence, or overall health.
+    Keep it concise. E.g. 'Analyzing symptoms: yellowing leaves, brown spotting on wheat.'
+    If the image is completely NOT related to agriculture/plants, say 'NON_CROP_DETECTED'.
     """
     
     try:
-        vision_res = model.generate_content(vision_prompt)
-        vision_data = json.loads(vision_res.text.replace('```json', '').replace('```', '').strip())
+        img = Image.open(io.BytesIO(image_bytes)).convert('RGB')
+        # Run vision inference via thread to avoid blocking if using sync SDK, or natively async
+        vision_res = await model.generate_content_async([vision_prompt, img])
+        vision_description = vision_res.text.strip()
     except Exception as e:
-        # Fallback or strict guardrail error
-        if "non_agri" in image_url:
-             return {"error": "Please upload a crop photo"}
-        vision_data = {"crop_type": "Unknown", "issue": "Unknown", "confidence": "0.0"}
+        vision_description = "Error analyzing image."
 
     # Guardrail Check
-    if vision_data.get('issue') == 'Not a crop':
-        return {"error": "Please upload a crop photo"}
+    if "NON_CROP_DETECTED" in vision_description:
+        return {
+            "agent_state": {"phase": "ERROR", "is_thinking": False, "progress_pct": 0},
+            "payload": {
+                "diagnosis": "I couldn't identify a plant. Please ensure the crop or affected leaf is in focus and try again.", 
+                "confidence_score": 0.0, 
+                "sources": [],
+                "treatment_plan": []
+            },
+            "diagnosis_status": "ERROR",
+            "rag_entities": [],
+            "next_step": "RESCAN_REQUIRED"
+        }
 
     # 2. Environmental Task
-    weather_data = get_weather(lat, lon)
+    weather_data = await asyncio.to_thread(get_weather, lat, lon)
     
-    # 3. RAG Knowledge Task
-    rag_query = f"{vision_data['crop_type']} {vision_data['issue']} treatment and care"
-    rag_context = search_agri_knowledge(rag_query)
+    # 3. Search Augmentation Task
+    rag_query = vision_description
+    if user_text:
+        rag_query += f" User notes: {user_text}"
+        
+    rag_context = await asyncio.to_thread(search_agri_knowledge, rag_query)
     
-    # 4. Final Synthesis & Translation Task
+    # 4. Final Synthesis Task - output strict UI Schema
     synthesis_prompt = f"""
-    You are the Kisaan-Sense Setup Orchestrator (Lead Intelligence Engine).
-    Based on the following data, generate the final diagnosis and action plan.
+    You are the Intelligence Orchestrator for Kisaan-Sense, an agricultural AI for Indian farmers.
+    Synthesize a final, localized diagnosis based on all available context:
 
-    Vision Diagnosis: {json.dumps(vision_data)}
-    Local Weather: {json.dumps(weather_data)}
-    Agricultural Manual Context: {rag_context}
-    Preferred Language for Audio Script: {preferred_language}
+    - Vision Description: {vision_description}
+    - Local Weather: {json.dumps(weather_data)}
+    - RAG Knowledge Base Context: {rag_context}
+    - Farmer's own notes: {user_text}
 
-    Rules:
-    1. Cross-reference the diagnosis with weather data to determine 'urgency' (High, Medium, Low) and explain why in 'environmental_context'.
-    2. Extract solutions from the Agricultural Manual Context. Prioritize organic/low-cost fixes for 'immediate_remedy'.
-    3. The 'localized_audio_script' must be translated into {preferred_language}.
+    ### CRITICAL OUTPUT RULES:
+    1. DIAGNOSIS: Translate the 'diagnosis' string fully into {preferred_language}. It must be concise (2-3 sentences) and actionable.
+    2. TREATMENT PLAN: Populate 'treatment_plan' with EXACTLY 3-4 steps. Each step MUST:
+       - Be numbered (e.g. "1. ...", "2. ...")
+       - Be specific and directly derived from the RAG Context above
+       - Prefer organic / low-cost solutions (neem oil, copper fungicide, crop rotation)
+       - Include dosage or timing where relevant (e.g. "Apply 2ml/L neem oil spray every 7 days")
+       - NEVER be generic filler like "Consult an expert" — only concrete steps
+    3. CONFIDENCE: Set confidence_score between 0.0 and 1.0 based on how clearly the image matches a known condition.
+    4. If the image shows a healthy plant, set treatment_plan to ["1. No action required. Crop appears healthy."] and confidence_score to 1.0.
 
-    Return ONLY a valid JSON object matching this schema exactly (no markdown formatting):
+    Return ONLY a valid JSON object matching exactly this schema (no markdown, no extra text):
     {{
-        "diagnosis": {{
-            "crop_type": "string",
-            "issue": "string",
-            "confidence": "string",
-            "urgency": "High | Medium | Low"
+        "agent_state": {{
+            "phase": "COMPLETED",
+            "is_thinking": false,
+            "progress_pct": 100
         }},
-        "environmental_context": "string",
-        "action_plan": {{
-            "immediate_remedy": "string",
-            "chemical_option": "string",
-            "prevention": "string"
+        "payload": {{
+            "diagnosis": "Localized diagnosis string in {preferred_language}.",
+            "confidence_score": 0.95,
+            "sources": ["RAG VectorDB", "Gemini Vision Model"],
+            "treatment_plan": [
+                "1. First specific step from RAG context",
+                "2. Second specific step with dosage/timing",
+                "3. Third preventive or follow-up step"
+            ]
         }},
-        "localized_audio_script": "string"
+        "diagnosis_status": "SUCCESS",
+        "rag_entities": ["key", "disease", "or", "pest", "names"],
+        "next_step": "DISPLAY_RESULTS"
     }}
     """
     
-    final_res = model.generate_content(synthesis_prompt)
-    
     try:
-        final_data = json.loads(final_res.text.replace('```json', '').replace('```', '').strip())
-        return {
-            "status": "success",
-            "data": final_data
-        }
+        final_res = await model.generate_content_async(synthesis_prompt)
+        final_text = final_res.text.replace('```json', '').replace('```', '').strip()
+        final_data = json.loads(final_text)
+        return final_data
     except Exception as e:
-        return {"error": f"Failed to parse Agent Output: {str(e)}"}
+        return {
+            "agent_state": {"phase": "ERROR", "is_thinking": False, "progress_pct": 0},
+            "payload": {"diagnosis": f"Synthesis failure. Try again.", "confidence_score": 0.0, "sources": [], "treatment_plan": []},
+            "diagnosis_status": "ERROR",
+            "rag_entities": [],
+            "next_step": "RESCAN_REQUIRED"
+        }

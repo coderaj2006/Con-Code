@@ -36,6 +36,14 @@ logger = logging.getLogger(__name__)
 # Initialize FastAPI
 app = FastAPI(title="Kisaan AI Proactive Loop", description="Hackathon MVP Phase 3 - Autonomous Agri-Assistant")
 
+# ---------------------------------------------------------------------------
+# SIMULATION_MODE: Set to False once real Firebase + Agmarknet credentials
+# are configured. When True, FCM sends mock push notifications and Mandi
+# data returns static demo prices. No external billing is incurred.
+# ---------------------------------------------------------------------------
+SIMULATION_MODE: bool = True
+
+
 # Infinite Loop Background Task
 async def proactive_weather_monitor():
     """
@@ -71,13 +79,27 @@ async def proactive_weather_monitor():
 
 @app.on_event("startup")
 async def startup_event():
+    # Ensure all required directories exist (also created at module level below,
+    # but this guard covers any edge-cases hit during async startup)
     os.makedirs("uploads/audio", exist_ok=True)
+    os.makedirs("chroma_db", exist_ok=True)
     await init_db()
     # Spawn the infinite loop task asynchronously
     asyncio.create_task(proactive_weather_monitor())
 
+# ---------------------------------------------------------------------------
+# Bootstrap critical runtime directories BEFORE app.mount() is called.
+# app.mount() is evaluated at module-import time, so the directory must
+# already exist — it cannot rely on the async startup_event hook.
+# ---------------------------------------------------------------------------
+os.makedirs("uploads", exist_ok=True)          # Static file serving root
+os.makedirs("uploads/audio", exist_ok=True)    # gTTS audio output
+os.makedirs("chroma_db", exist_ok=True)        # ChromaDB vector persistence
+
 # Mount static files so URLs can be accessed by the browser
 app.mount("/static", StaticFiles(directory="uploads"), name="static")
+# Dedicated audio route — speech_url points here (http://localhost:8001/audio/<file>.mp3)
+app.mount("/audio", StaticFiles(directory="uploads/audio"), name="audio")
 
 # Configure CORS
 app.add_middleware(
@@ -110,12 +132,9 @@ class ChatRequest(BaseModel):
     message: str
 
 class ChatResponse(BaseModel):
-    agent_state: str
-    follow_up_question: Optional[str] = None
-    rag_advice: str
-    audio_summary: str
-    language_code: Optional[str] = None
+    response: str
     speech_url: Optional[str] = None
+    follow_up_question: Optional[str] = None
 
 # Global Exception Handler
 @app.exception_handler(Exception)
@@ -131,7 +150,8 @@ def _generate_speech_sync(text: str, filename: str, lang: str = 'hi'):
 async def generate_speech(text: str, file_id: str, lang: str = 'hi') -> str:
     local_path = f"uploads/audio/{file_id}.mp3"
     await asyncio.to_thread(_generate_speech_sync, text, local_path, lang)
-    return f"http://localhost:8000/static/audio/{file_id}.mp3"
+    # Use port 8001 and the /audio static route (not /static/audio)
+    return f"http://localhost:8001/audio/{file_id}.mp3"
 
 # Mock Mandi Market API Utility
 async def fetch_mandi_prices(crop_name: str) -> Dict[str, Any]:
@@ -166,23 +186,6 @@ async def fetch_weather_and_alerts(lat: float, lon: float) -> Tuple[Dict[str, An
             
         return current_data, WeatherAlertState(has_alert, reasons)
 
-class AgriBrain:
-    @staticmethod
-    async def analyze(image_b64: str, transcript: Optional[str], previous_context: Optional[str] = None) -> Dict[str, Any]:
-        image_data = base64.b64decode(image_b64.split(',', 1)[1] if ',' in image_b64 else image_b64)
-        img = Image.open(io.BytesIO(image_data)).convert('RGB')
-
-        # Fallback to Gemini (Native CV model integration reserved for teammate)
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        prompt = "You are an Expert Agronomist. Return ONLY JSON matching schema: {diagnosis:str, confidence:float, immediate_action:list, organic_alternative:str, regional_language_summary:str, market_valuation:str, government_subsidy_hint:str}\n"
-        if previous_context: prompt += f"Context: {previous_context}\n"
-        if transcript: prompt += f"Transcript: {transcript}\n"
-        
-        response = await model.generate_content_async([prompt, img])
-        text = response.text.strip()
-        if text.startswith("```json"): text = text[7:-3].strip()
-        return json.loads(text)
-
 # API Endpoints
 @app.get("/health")
 async def health_check(): return {"status": "healthy"}
@@ -202,50 +205,6 @@ async def get_weather_alerts(lat: float, lon: float):
         logger.error(f"Weather fetch failed: {e}")
         return {"title": "Error", "message": "Weather unavailable", "urgency": "N/A", "humidity": 0, "temperature": 0}
 
-@app.post("/analyze/upload", response_model=UnifiedResponse)
-async def analyze_crop_file_upload(
-    image: UploadFile = File(...),
-    lat: float = Form(...),
-    lon: float = Form(...),
-    transcript: Optional[str] = Form(None),
-    farmer_id: Optional[int] = Form(None),
-    db: AsyncSession = Depends(get_db)
-):
-    """ Legacy image upload flow """
-    farmer, previous_context, market_prices = None, None, None
-    if farmer_id:
-        result = await db.execute(select(FarmerProfile).where(FarmerProfile.id == farmer_id))
-        farmer = result.scalars().first()
-        if farmer:
-            market_prices = await fetch_mandi_prices(farmer.primary_crop)
-            hist = await db.execute(select(DiagnosisHistory).where(DiagnosisHistory.farmer_id == farmer_id).order_by(DiagnosisHistory.timestamp.desc()))
-            latest = hist.scalars().first()
-            if latest: previous_context = latest.ai_diagnosis
-
-    weather_info, alert_state = await fetch_weather_and_alerts(lat, lon)
-    
-    file_id = str(uuid.uuid4())
-    local_filename = f"uploads/{file_id}.jpg"
-    image_bytes = await image.read()
-    async with aiofiles.open(local_filename, 'wb') as f: await f.write(image_bytes)
-    
-    diagnosis_data = await AgriBrain.analyze(base64.b64encode(image_bytes).decode('utf-8'), transcript, previous_context)
-    
-    if farmer_id:
-        db.add(DiagnosisHistory(farmer_id=farmer_id, crop_image_url=local_filename, ai_diagnosis=diagnosis_data.get('diagnosis')))
-        await db.commit()
-
-    speech_url = None
-    if hindi_text := diagnosis_data.get("regional_language_summary"):
-        speech_url = await generate_speech(hindi_text, file_id)
-
-    return UnifiedResponse(data=AnalyzeResponseData(
-        weather_info=weather_info,
-        weather_alerts={"has_alert": alert_state.has_alert, "reasons": alert_state.reasons},
-        market_prices=market_prices,
-        diagnosis=diagnosis_data,
-        speech_url=speech_url
-    ))
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat_advisory(req: ChatRequest, db: AsyncSession = Depends(get_db)):
@@ -362,22 +321,18 @@ User Query: {req.message}
     db.add(ChatMessage(session_id=session.id, role="model", content=json.dumps(parsed_resp)))
     await db.commit()
 
-    # Synthesize Audio Response strictly from the regional audio summary using the detected lang code
+        # Synthesize Audio Response strictly from the regional audio summary using the detected lang code
     speech_url = None
     try:
-        # Fallback to 'hi' if language_code fails
         if audio_summary:
             speech_url = await generate_speech(audio_summary, str(uuid.uuid4()), lang=language_code)
     except Exception as e:
         logger.error(f"Chat TTS error: {e}")
         
     return ChatResponse(
-        agent_state=agent_state,
-        follow_up_question=follow_up_question,
-        rag_advice=rag_advice,
-        audio_summary=audio_summary,
-        language_code=language_code,
-        speech_url=speech_url
+        response=rag_advice,
+        speech_url=speech_url,
+        follow_up_question=follow_up_question
     )
 
 @app.get("/notifications/{farmer_id}")
@@ -430,26 +385,84 @@ async def process_voice_to_text(
 from fastapi import HTTPException
 from orchestrator.agent import run_analysis_workflow
 
-class AnalysisRequest(BaseModel):
-    image_url: str
-    latitude: float
-    longitude: float
-    preferred_language: str
-
 @app.post("/analyze")
-def analyze_crop(request: AnalysisRequest):
+async def analyze_crop(
+    image: UploadFile = File(...),
+    lat: float = Form(...),
+    lon: float = Form(...),
+    transcript: Optional[str] = Form(None),
+    preferred_language: str = Form("en"),
+    farmer_id: Optional[int] = Form(None),
+    db: AsyncSession = Depends(get_db)
+):
     """
-    Given an image URL, GPS coordinates, and a preferred language, returns a localized, 
-    hyper-specific agricultural advice payload.
+    Given an image file, GPS coordinates, and a preferred language, returns a localized, 
+    hyper-specific agricultural advice payload matching the Orchestrator schema.
     """
-    result = run_analysis_workflow(
-        image_url=request.image_url,
-        lat=request.latitude,
-        lon=request.longitude,
-        preferred_language=request.preferred_language
+    image_bytes = await image.read()
+    
+    result = await run_analysis_workflow(
+        image_bytes=image_bytes,
+        user_text=transcript or "",
+        lat=lat,
+        lon=lon,
+        preferred_language=preferred_language
     )
     
-    if "error" in result:
-        raise HTTPException(status_code=400, detail=result["error"])
-        
+    if "agent_state" in result and result["agent_state"].get("phase") == "ERROR":
+        raise HTTPException(status_code=400, detail=result["payload"]["diagnosis"])
+    
+    # Background persistence of scan into SQLite
+    if farmer_id:
+        try:
+            db.add(DiagnosisHistory(
+                farmer_id=farmer_id,
+                crop_image_url="uploaded_scan", 
+                ai_diagnosis=result.get("payload", {}).get("diagnosis", "Unknown")
+            ))
+            await db.commit()
+        except Exception as e:
+            logger.error(f"Failed to record diagnostic history: {e}")
+            
     return result
+
+@app.get("/telemetry")
+async def fetch_telemetry(farmer_id: int = 1, db: AsyncSession = Depends(get_db)):
+    """ Pull latest history and mandi data, handling mocked fallbacks if DB is empty. """
+    hist_result = await db.execute(
+        select(DiagnosisHistory)
+        .where(DiagnosisHistory.farmer_id == farmer_id)
+        .order_by(DiagnosisHistory.timestamp.desc())
+        .limit(5)
+    )
+    history = hist_result.scalars().all()
+    
+    MOCK_MANDI = [
+        {"crop": "Tomato", "price": 2400, "unit": "Quintal", "trend": "up", "market": "Azadpur"},
+        {"crop": "Wheat", "price": 2100, "unit": "Quintal", "trend": "stable", "market": "Lucknow"},
+        {"crop": "Potato", "price": 1200, "unit": "Quintal", "trend": "down", "market": "Indore"}
+    ]
+    MOCK_HISTORY = [
+        {"date": "10 Apr", "type": "Pest Scan", "result": "Early Blight", "crop": "Tomato"},
+        {"date": "08 Apr", "type": "Voice Help", "result": "Fertilizer Advice", "crop": "Wheat"},
+        {"date": "05 Apr", "type": "Pest Scan", "result": "Healthy", "crop": "Rice"},
+    ]
+    
+    # Translate historical diagnosis into UI schema format safely natively
+    ui_history = []
+    if history:
+        for h in history:
+            date_str = h.timestamp.strftime("%d %b")
+            ui_history.append({
+                "date": date_str,
+                "type": "Pest Scan",
+                "result": h.ai_diagnosis[:30] + "..." if len(h.ai_diagnosis) > 30 else h.ai_diagnosis,
+                "crop": "Automated Scan"
+            })
+    else:
+        ui_history = MOCK_HISTORY
+        
+    return {
+        "mandi": MOCK_MANDI,
+        "history": ui_history
+    }
