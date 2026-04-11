@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+@theme {
+  --color-agri-green: #2D5A27;
+  --color-agri-green-dark: #1e3d1a;
+  --color-agri-green-light: #3d7a35;
+  --color-agri-amber: #FFBF00;
+  --color-agri-amber-dark: #cc9900;
+  --color-agri-amber-light: #ffd633;
+  --color-agri-earth: #8B4513;
+  --color-alert-red: #E11D48;
+  
+  --shadow-agri: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-agri-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+
+  --animate-pulse-red: pulse-red 2s infinite;
+
+  @keyframes pulse-red {
+    0%, 100% { 
+      border-color: rgba(225, 29, 72, 0.4); 
+      box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.4); 
+    }
+    50% { 
+      border-color: rgba(225, 29, 72, 1); 
+      box-shadow: 0 0 0 10px rgba(225, 29, 72, 0); 
+    }
+  }
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    font-size: 16px;
+  }
+
+  body {
+    background-color: var(--color-gray-50);
+    color: var(--color-gray-900);
+    antialiased: true;
+    font-family: Inter, system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .btn-press {
+    @apply active:scale-95 transition-transform duration-75;
+  }
+
+  .card-agri {
+    @apply bg-white rounded-2xl shadow-agri border border-gray-100 p-4 transition-all hover:shadow-agri-lg;
+  }
+
+  .glass-card {
+    @apply bg-white/80 backdrop-blur-md border border-white/20 rounded-2xl shadow-xl;
+  }
+
+  .spinner {
+    @apply w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: var(--color-gray-100);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--color-agri-green), transparent 80%);
+  border-radius: 9999px;
+}
+
+/* Indic Script Font Adjustments */
+[lang="hi"], [lang="pa"], [lang="bn"], [lang="gu"], [lang="mr"], [lang="kn"], [lang="ml"], [lang="ta"], [lang="te"], [lang="as"] {
+  line-height: 1.6;
+}

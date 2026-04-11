@@ -1,0 +1,21 @@
+{
+  "short_name": "Kisaan AI",
+  "name": "Kisaan AI - Farmer Advisory Dashboard",
+  "icons": [
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#2D5A27",
+  "background_color": "#F9FAFB",
+  "orientation": "portrait",
+  "description": "Premium AI-powered agricultural advisor for Indian farmers.",
+  "lang": "en-IN",
+  "dir": "ltr",
+  "categories": ["agriculture", "education", "utilities"]
+}
