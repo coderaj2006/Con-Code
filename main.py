@@ -164,7 +164,7 @@ async def proactive_weather_monitor():
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled: {exc}", exc_info=True)
-    return JSONResponse(status_code=200, content={"error": str(exc), "data": None})
+    return JSONResponse(status_code=500, content={"error": str(exc), "data": None})
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # AUTH ENDPOINTS
