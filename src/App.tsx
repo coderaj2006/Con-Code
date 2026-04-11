@@ -7,7 +7,8 @@ import { CropStatus } from './components/CropStatus';
 import { ChatOverlay } from './components/ChatOverlay';
 import { BottomNav } from './components/BottomNav';
 import { ScanningOverlay } from './components/ScanningOverlay';
-import { WeatherAlertResponse, sendMessage } from './services/api';
+import { WeatherAlertResponse, sendMessage, analyzeCrop } from './services/api';
+import { useRef } from 'react';
 import { weatherService } from './services/weatherService';
 import { speechService } from './services/speech';
 import { SkeletonCard } from './components/SkeletonCard';
@@ -22,6 +23,7 @@ export interface ChatMessage {
   content: string;
   data?: any;
   timestamp: string;
+  speech_url?: string;
 }
 
 function AppContent() {
@@ -36,6 +38,46 @@ function AppContent() {
     return localStorage.getItem('sunlight-mode') === 'true';
   });
   const [isWeatherDataLoading, setIsWeatherDataLoading] = useState(true);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageAnalysis = async (file: File) => {
+    setIsAnalysing(true);
+    addChatMessage({
+      role: 'user',
+      type: 'analysis',
+      content: 'Uploading crop image for AI diagnosis...',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
+
+    const process = async (lat: number, lon: number) => {
+      try {
+        const result = await analyzeCrop(file, lat, lon, currentLanguage);
+        addChatMessage({
+          role: 'ai',
+          type: 'analysis',
+          content: result.description,
+          data: result,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        });
+      } catch (error) {
+        console.error('Analysis error:', error);
+        addChatMessage({
+          role: 'ai',
+          type: 'text',
+          content: 'Sorry, I had trouble analyzing that image. Please try again.',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        });
+      } finally {
+        setIsAnalysing(false);
+      }
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => process(pos.coords.latitude, pos.coords.longitude),
+      () => process(28.6139, 77.2090), // Default to Delhi
+      { timeout: 5000 }
+    );
+  };
 
   useEffect(() => {
     localStorage.setItem('sunlight-mode', isSunlightMode.toString());
@@ -77,7 +119,8 @@ function AppContent() {
         role: 'ai',
         type: 'text',
         content: response.content,
-        timestamp: response.timestamp
+        timestamp: response.timestamp,
+        speech_url: response.speech_url
       });
     } catch (error) {
       console.error('Chat error:', error);
@@ -149,8 +192,16 @@ function AppContent() {
 
           <section>
             <ErrorBoundary>
+              <input 
+                type="file" 
+                accept="image/*" 
+                capture="environment" 
+                className="hidden" 
+                ref={cameraInputRef}
+                onChange={(e) => e.target.files?.[0] && handleImageAnalysis(e.target.files[0])}
+              />
               <QuickActions 
-                onScan={() => setIsAnalysing(true)} 
+                onScan={() => cameraInputRef.current?.click()} 
                 onVoice={handleVoiceHelp} 
                 isSunlightMode={isSunlightMode} 
               />
@@ -159,7 +210,7 @@ function AppContent() {
 
           <section>
             <ErrorBoundary>
-              <CropStatus isSunlightMode={isSunlightMode} />
+              <CropStatus weatherData={weatherData} isSunlightMode={isSunlightMode} />
             </ErrorBoundary>
           </section>
 
@@ -187,7 +238,12 @@ function AppContent() {
           )}
         </AnimatePresence>
 
-        <ScanningOverlay isVisible={isAnalysing} />
+
+        <ScanningOverlay 
+          isVisible={isAnalysing} 
+          onCancel={() => setIsAnalysing(false)}
+          onUpload={(file) => handleImageAnalysis(file)}
+        />
       </div>
     </div>
   );

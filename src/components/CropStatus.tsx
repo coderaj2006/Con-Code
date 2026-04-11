@@ -2,17 +2,32 @@ import { FC, useState, useEffect } from 'react';
 import { Droplets, Thermometer, TestTube, Wind } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 
+import { WeatherAlertResponse } from '../services/api';
+
 interface CropStatusProps {
   isSunlightMode?: boolean;
+  weatherData?: WeatherAlertResponse | null;
 }
 
-export const CropStatus: FC<CropStatusProps> = ({ isSunlightMode }) => {
+export const CropStatus: FC<CropStatusProps> = ({ isSunlightMode, weatherData }) => {
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(true);
 
   const vitals = [
-    { label: t('humidity'), value: '85%', status: 'High', color: 'bg-red-500/20 text-red-500', icon: Wind },
-    { label: t('temperature'), value: '32°C', status: 'Warm', color: 'bg-amber-500/20 text-amber-500', icon: Thermometer },
+    { 
+      label: t('humidity'), 
+      value: weatherData ? `${weatherData.humidity}%` : '85%', 
+      status: (weatherData?.humidity ?? 85) > 80 ? 'High' : 'Normal', 
+      color: (weatherData?.humidity ?? 85) > 80 ? 'bg-red-500/20 text-red-500' : 'bg-emerald-500/20 text-emerald-500', 
+      icon: Wind 
+    },
+    { 
+      label: t('temperature'), 
+      value: weatherData ? `${Math.round(weatherData.temperature)}°C` : '32°C', 
+      status: (weatherData?.temperature ?? 32) > 35 ? 'Hot' : 'Warm', 
+      color: (weatherData?.temperature ?? 32) > 35 ? 'bg-orange-500/20 text-orange-500' : 'bg-amber-500/20 text-amber-500', 
+      icon: Thermometer 
+    },
     { label: t('soil_ph'), value: '6.8', status: 'Good', color: 'bg-emerald-500/20 text-emerald-500', icon: TestTube },
     { label: t('moisture'), value: '42%', status: 'Good', color: 'bg-emerald-500/20 text-emerald-500', icon: Droplets },
   ];

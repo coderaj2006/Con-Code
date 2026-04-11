@@ -15,6 +15,24 @@ export interface WeatherAlertResponse {
   temperature: number;
 }
 
+export interface DiagnosisHistoryItem {
+  id: number;
+  farmer_id: number;
+  timestamp: string;
+  crop_image_url: string | null;
+  ai_diagnosis: string | null;
+  weather_at_time: string | null;
+}
+
+export interface MandiPriceResponse {
+  crop: string;
+  market_data: {
+    min_price: string;
+    max_price: string;
+    trend: string;
+  };
+}
+
 export const analyzeCrop = async (file: File, lat: number, lon: number, language: string): Promise<CropAnalysisResponse> => {
   const formData = new FormData();
   formData.append('image', file);
@@ -45,21 +63,46 @@ export const getWeatherAlerts = async (lat: number, lon: number): Promise<Weathe
   return response.json();
 };
 
-export const sendMessage = async (text: string, language: string): Promise<{ content: string; timestamp: string }> => {
+export const sendMessage = async (text: string, language: string): Promise<{ content: string; timestamp: string; speech_url?: string }> => {
   console.log('API: Sending message to backend:', { text, language });
+  
   const response = await fetch(`${API_BASE_URL}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message: text, farmer_id: 1 }), // Fixed payload mismatch: added farmer_id, renamed text to message
+    body: JSON.stringify({ message: text, farmer_id: 1 }),
   });
+
   if (!response.ok) {
     console.error('API: Chat failed with status:', response.status);
-    throw new Error('Chat failed');
+    throw new Error('Chat connection failed');
   }
+
   const data = await response.json();
-  console.log('API: Received response:', data);
-  // Map backend ChatResponse to { content, timestamp } which frontend expects
-  return { content: data.response, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+  console.log('API: Received real response:', data);
+  
+  return { 
+    content: data.rag_advice || data.response || "No advice received", 
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    speech_url: data.speech_url
+  };
+};
+
+export const getFarmerHistory = async (farmerId: number): Promise<DiagnosisHistoryItem[]> => {
+  const response = await fetch(`${API_BASE_URL}/history/farmer/${farmerId}`);
+  if (!response.ok) throw new Error('Failed to fetch history');
+  return response.json();
+};
+
+export const getHistoryDetail = async (id: number): Promise<DiagnosisHistoryItem> => {
+  const response = await fetch(`${API_BASE_URL}/history/${id}`);
+  if (!response.ok) throw new Error('Failed to fetch history detail');
+  return response.json();
+};
+
+export const getMandiPrices = async (crop: string): Promise<MandiPriceResponse> => {
+  const response = await fetch(`${API_BASE_URL}/mandi/${crop}`);
+  if (!response.ok) throw new Error('Failed to fetch mandi prices');
+  return response.json();
 };
 
 export const fileToBase64 = (file: File): Promise<string> => {

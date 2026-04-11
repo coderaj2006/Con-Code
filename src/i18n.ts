@@ -41,7 +41,10 @@ export const translations: Record<string, Record<string, string>> = {
     crop_wheat: 'Wheat',
     status_good: 'Good',
     status_updated_prefix: 'ago',
-    view_detailed_progress: 'View Detailed Progress'
+    view_detailed_progress: 'View Detailed Progress',
+    stop_audio: 'Stop Audio',
+    btn_cancel: 'Cancel',
+    btn_upload_gallery: 'Upload from Gallery'
   },
   hi: {
     scan_plant: 'फसल स्कैन करें',
@@ -69,7 +72,10 @@ export const translations: Record<string, Record<string, string>> = {
     crop_wheat: 'गेहूं',
     status_good: 'सही है',
     status_updated_prefix: 'पहले',
-    view_detailed_progress: 'पूरी जानकारी देखें'
+    view_detailed_progress: 'पूरी जानकारी देखें',
+    stop_audio: 'आवाज बंद करें',
+    btn_cancel: 'रद्द करें',
+    btn_upload_gallery: 'गैलरी से अपलोड करें'
   },
   bgc: {
     scan_plant: 'फसल स्कैन करलो',
@@ -97,7 +103,10 @@ export const translations: Record<string, Record<string, string>> = {
     crop_wheat: 'गेहूं',
     status_good: 'ढिंचैक',
     status_updated_prefix: 'पहले',
-    view_detailed_progress: 'सारी जानकारी देखो'
+    view_detailed_progress: 'सारी जानकारी देखो',
+    stop_audio: 'आवाज बंद करलो',
+    btn_cancel: 'रद्द करो',
+    btn_upload_gallery: 'गैलरी तै फोटो ठा लो'
   },
   pa: {
     scan_plant: 'ਫਸਲ ਸਕੈਨ ਕਰੋ',
@@ -125,7 +134,10 @@ export const translations: Record<string, Record<string, string>> = {
     crop_wheat: 'ਕਣਕ',
     status_good: 'ਵਧੀਆ',
     status_updated_prefix: 'ਪਹਿਲਾਂ',
-    view_detailed_progress: 'ਵੇਰਵੇ ਦੇਖੋ'
+    view_detailed_progress: 'ਵੇਰਵੇ ਦੇਖੋ',
+    stop_audio: 'ਆਵਾਜ਼ ਬੰਦ ਕਰੋ',
+    btn_cancel: 'ਰੱਦ ਕਰੋ',
+    btn_upload_gallery: 'ਗੈਲਰੀ ਤੋਂ ਅਪਲੋਡ ਕਰੋ'
   },
   gu: {
     scan_plant: 'પાક સ્કેન કરો',
@@ -153,7 +165,10 @@ export const translations: Record<string, Record<string, string>> = {
     crop_wheat: 'ઘઉં',
     status_good: 'સારું',
     status_updated_prefix: 'પહેલા',
-    view_detailed_progress: 'વિગતવાર પ્રગતિ જુઓ'
+    view_detailed_progress: 'વિગતવાર પ્રગતિ જુઓ',
+    stop_audio: 'ઓડિયો બંધ કરો',
+    btn_cancel: 'રદ કરો',
+    btn_upload_gallery: 'ગેલેરીમાંથી અપલોડ કરો'
   },
   ml: {
     scan_plant: 'സസ്യം സ്കാൻ ചെയ്യുക',
@@ -181,7 +196,10 @@ export const translations: Record<string, Record<string, string>> = {
     crop_wheat: 'ഗോതമ്പ്',
     status_good: 'നല്ലത്',
     status_updated_prefix: 'മുൻപ്',
-    view_detailed_progress: 'വിശദാംശങ്ങൾ കാണുക'
+    view_detailed_progress: 'വിശദാംശങ്ങൾ കാണുക',
+    stop_audio: 'ഓഡിയോ നിർത്തുക',
+    btn_cancel: 'റദ്ദാക്കുക',
+    btn_upload_gallery: 'ഗാലറിയിൽ നിന്ന് അപ്‌ലോഡ് ചെയ്യുക'
   },
   te: {
     scan_plant: 'పంటను స్కాన్ చేయండి',
@@ -209,7 +227,10 @@ export const translations: Record<string, Record<string, string>> = {
     crop_wheat: 'గోధుమ',
     status_good: 'బాగుంది',
     status_updated_prefix: 'క్రితం',
-    view_detailed_progress: 'వివరాలు చూడండి'
+    view_detailed_progress: 'వివరాలు చూడండి',
+    stop_audio: 'ఆడియోను ఆపండి',
+    btn_cancel: 'రద్దు చేయండి',
+    btn_upload_gallery: 'గ్యాలరీ నుండి అప్‌లోడ్ చేయండి'
   },
   ta: {
     scan_plant: 'பயிரை ஸ்கேன் செய்யவும்',
@@ -237,7 +258,10 @@ export const translations: Record<string, Record<string, string>> = {
     crop_wheat: 'கோதுமை',
     status_good: 'நன்று',
     status_updated_prefix: 'முன்பு',
-    view_detailed_progress: 'விவரங்களைப் பார்க்கவும்'
+    view_detailed_progress: 'விவரங்களைப் பார்க்கவும்',
+    stop_audio: 'ஒலியை நிறுத்து',
+    btn_cancel: 'ரத்து செய்',
+    btn_upload_gallery: 'கேலரியில் இருந்து பதிவேற்றவும்'
   },
   kn: {
     scan_plant: 'ಬೆಳೆ ಸ್ಕ್ಯಾನ್ ಮಾಡಿ',
@@ -265,7 +289,10 @@ export const translations: Record<string, Record<string, string>> = {
     crop_wheat: 'ಗೋಧಿ',
     status_good: 'ಚೆನ್ನಾಗಿದೆ',
     status_updated_prefix: 'ಹಿಂದೆ',
-    view_detailed_progress: 'ವಿವರಗಳನ್ನು ನೋಡಿ'
+    view_detailed_progress: 'ವಿವರಗಳನ್ನು ನೋಡಿ',
+    stop_audio: 'ಆಡಿಯೋ ನಿಲ್ಲಿಸಿ',
+    btn_cancel: 'ರದ್ದುಮಾಡಿ',
+    btn_upload_gallery: 'ಗ್ಯಾಲರಿಯಿಂದ ಅಪ್‌ಲೋಡ್ ಮಾಡಿ'
   },
   as: {
     scan_plant: 'শস্য স্ক্যান কৰক',
@@ -293,7 +320,10 @@ export const translations: Record<string, Record<string, string>> = {
     crop_wheat: 'ঘেঁহু',
     status_good: 'ভাল',
     status_updated_prefix: 'আগতে',
-    view_detailed_progress: 'সবিশেষ চাওক'
+    view_detailed_progress: 'সবিশেষ চাওক',
+    stop_audio: "অডিঅ' বন্ধ কৰক",
+    btn_cancel: 'বাতিল কৰক',
+    btn_upload_gallery: 'গেলাৰীৰ পৰা আপলোড কৰক'
   },
   bn: {
     scan_plant: 'ফসল স্ক্যান করুন',
@@ -321,6 +351,9 @@ export const translations: Record<string, Record<string, string>> = {
     crop_wheat: 'গম',
     status_good: 'ভালো',
     status_updated_prefix: 'আগে',
-    view_detailed_progress: 'বিস্তারিত দেখুন'
+    view_detailed_progress: 'বিস্তারিত দেখুন',
+    stop_audio: 'অডিও বন্ধ করুন',
+    btn_cancel: 'বাতিল করুন',
+    btn_upload_gallery: 'গ্যালারি থেকে আপলোড করুন'
   }
 };

@@ -427,6 +427,36 @@ async def process_voice_to_text(
         logger.error(f"Voice processing error for Farmer {farmer_id}: {e}", exc_info=True)
         return JSONResponse(status_code=500, content={"error": "Failed to process audio query. Please try typing or check your microphone settings."})
 
+@app.get("/mandi/{crop_name}")
+async def get_mandi_prices_endpoint(crop_name: str):
+    """ Fetch market prices for a specific crop """
+    try:
+        data = await fetch_mandi_prices(crop_name)
+        return data
+    except Exception as e:
+        logger.error(f"Mandi price fetch failed: {e}")
+        return JSONResponse(status_code=500, content={"error": "Failed to fetch market data"})
+
+@app.get("/history/{history_id}")
+async def get_history_detail(history_id: int, db: AsyncSession = Depends(get_db)):
+    """ Fetch a single diagnosis history record by ID """
+    result = await db.execute(select(DiagnosisHistory).where(DiagnosisHistory.id == history_id))
+    history = result.scalars().first()
+    if not history:
+        raise HTTPException(status_code=404, detail="History record not found")
+    return history
+
+@app.get("/history/farmer/{farmer_id}")
+async def get_farmer_history(farmer_id: int, db: AsyncSession = Depends(get_db)):
+    """ Fetch all diagnosis records for a specific farmer """
+    result = await db.execute(
+        select(DiagnosisHistory)
+        .where(DiagnosisHistory.farmer_id == farmer_id)
+        .order_by(DiagnosisHistory.timestamp.desc())
+    )
+    histories = result.scalars().all()
+    return histories
+
 from fastapi import HTTPException
 from orchestrator.agent import run_analysis_workflow
 
