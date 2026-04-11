@@ -2,6 +2,7 @@ import { useRef, useState, useEffect, FC, ChangeEvent } from 'react';
 import { Camera, Mic } from 'lucide-react';
 import { analyzeCrop, fileToBase64 } from '../services/api';
 import { ChatMessage } from '../App';
+import { motion } from 'framer-motion';
 
 interface HeroActionsProps {
   selectedLanguage: { code: string; name: string };
@@ -9,6 +10,7 @@ interface HeroActionsProps {
   setIsAnalysing: (val: boolean) => void;
   addChatMessage: (msg: ChatMessage) => void;
   onVoiceHelp: () => void;
+  isSunlightMode?: boolean;
 }
 
 const TIPS = [
@@ -23,7 +25,8 @@ export const HeroActions: FC<HeroActionsProps> = ({
   isAnalysing, 
   setIsAnalysing, 
   addChatMessage,
-  onVoiceHelp
+  onVoiceHelp,
+  isSunlightMode
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [tipIndex, setTipIndex] = useState(0);
@@ -81,8 +84,28 @@ export const HeroActions: FC<HeroActionsProps> = ({
     }
   };
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, scale: 0.9 },
+    show: { opacity: 1, scale: 1 }
+  };
+
   return (
-    <div className="px-4 py-6 grid grid-cols-2 gap-4">
+    <motion.div 
+      variants={containerVariants}
+      initial="hidden"
+      animate="show"
+      className="grid grid-cols-2 gap-6"
+    >
       <input 
         type="file" 
         accept="image/*" 
@@ -92,38 +115,60 @@ export const HeroActions: FC<HeroActionsProps> = ({
         onChange={handleFileChange}
       />
 
-      <button 
+      {/* Main Action: Scan Plant */}
+      <motion.button 
+        variants={itemVariants}
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
         onClick={handleScanClick}
         disabled={isAnalysing}
-        className={`flex flex-col items-center justify-center bg-agri-green text-white rounded-[2.5rem] p-6 shadow-agri-lg btn-press aspect-square relative group overflow-hidden ${isAnalysing ? 'opacity-90' : ''}`}
+        className={`col-span-2 flex flex-col items-center justify-center p-8 shadow-agri-lg relative group overflow-hidden ${
+          isSunlightMode 
+          ? 'bg-black border-4 border-white text-white rounded-[3rem]' 
+          : 'bg-agri-green text-white rounded-[3rem] shadow-agri-glow'
+        } ${isAnalysing ? 'opacity-90' : ''}`}
       >
-        <div className="absolute inset-0 bg-white/5 opacity-0 group-active:opacity-100 transition-opacity"></div>
-        <div className="w-16 h-16 bg-white/20 rounded-3xl flex items-center justify-center mb-4 border border-white/20">
+        {!isSunlightMode && <div className="absolute inset-0 bg-white/5 opacity-0 group-active:opacity-100 transition-opacity"></div>}
+        <div className={`w-20 h-20 rounded-3xl flex items-center justify-center mb-4 border ${
+          isSunlightMode ? 'bg-white text-black border-white' : 'bg-white/20 border-white/20'
+        }`}>
           {isAnalysing ? (
             <div className="spinner"></div>
           ) : (
-            <Camera className="w-10 h-10" />
+            <Camera className="w-12 h-12" />
           )}
         </div>
-        <span className="text-xl font-black uppercase tracking-wider text-center line-clamp-2">
+        <span className={`text-2xl font-black uppercase tracking-wider text-center ${isSunlightMode ? 'text-neon-agri' : ''}`}>
           {isAnalysing ? 'Analysing' : 'Scan Plant'}
         </span>
-        <span className="text-[0.65rem] opacity-70 mt-1 font-medium italic text-center px-2">
-          {isAnalysing ? TIPS[tipIndex] : 'Detect Pests & Health'}
+        <span className={`text-xs mt-2 font-medium italic text-center px-4 ${isSunlightMode ? 'text-white' : 'opacity-70'}`}>
+          {isAnalysing ? TIPS[tipIndex] : 'Detect Pests, Disease & Soil Health'}
         </span>
-      </button>
+      </motion.button>
 
-      <button 
+      {/* Secondary Action: Voice Help */}
+      <motion.button 
+        variants={itemVariants}
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
         onClick={onVoiceHelp}
-        className="flex flex-col items-center justify-center bg-agri-amber text-agri-green-dark rounded-[2.5rem] p-6 shadow-agri-lg btn-press aspect-square relative group overflow-hidden"
+        className={`col-span-2 flex items-center justify-center gap-6 p-6 shadow-agri-lg relative group overflow-hidden ${
+          isSunlightMode 
+          ? 'bg-black border-4 border-white text-white rounded-[2.5rem]' 
+          : 'bg-agri-amber text-agri-green-dark rounded-[2.5rem]'
+        }`}
       >
-        <div className="absolute inset-0 bg-black/5 opacity-0 group-active:opacity-100 transition-opacity"></div>
-        <div className="w-16 h-16 bg-white/40 rounded-3xl flex items-center justify-center mb-4 border border-white/40">
-          <Mic className="w-10 h-10" />
+        {!isSunlightMode && <div className="absolute inset-0 bg-black/5 opacity-0 group-active:opacity-100 transition-opacity"></div>}
+        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border ${
+          isSunlightMode ? 'bg-white text-black border-white' : 'bg-white/40 border-white/40'
+        }`}>
+          <Mic className="w-8 h-8" />
         </div>
-        <span className="text-xl font-black uppercase tracking-wider text-agri-green leading-none text-center">Voice Help</span>
-        <span className="text-[0.65rem] text-agri-green opacity-70 mt-1 font-medium italic text-center px-2">Talk to Advisor</span>
-      </button>
-    </div>
+        <div className="text-left">
+          <span className={`text-xl font-black uppercase tracking-wider block ${isSunlightMode ? 'text-neon-agri' : 'text-agri-green'}`}>Voice Help</span>
+          <span className={`text-xs font-medium italic ${isSunlightMode ? 'text-white' : 'text-agri-green/70'}`}>Talk to AI Expert</span>
+        </div>
+      </motion.button>
+    </motion.div>
   );
 };

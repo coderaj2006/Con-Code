@@ -1,13 +1,19 @@
 import { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { AlertCard } from './components/AlertCard';
-import { HeroActions } from './components/HeroActions';
+import { QuickActions } from './components/QuickActions';
+import { MyCrops } from './components/MyCrops';
 import { CropStatus } from './components/CropStatus';
 import { ChatOverlay } from './components/ChatOverlay';
-import { History } from './components/History';
+import { BottomNav } from './components/BottomNav';
 import { ScanningOverlay } from './components/ScanningOverlay';
-import { getWeatherAlerts, WeatherAlertResponse, sendMessage } from './services/api';
+import { WeatherAlertResponse, sendMessage } from './services/api';
+import { weatherService } from './services/weatherService';
 import { speechService } from './services/speech';
+import { SkeletonCard } from './components/SkeletonCard';
+import { AnimatePresence } from 'framer-motion';
+import { ToastProvider } from './context/ToastContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 export interface ChatMessage {
   role: 'user' | 'ai';
@@ -17,26 +23,35 @@ export interface ChatMessage {
   timestamp: string;
 }
 
-function App() {
+function AppContent() {
   const [selectedLanguage, setSelectedLanguage] = useState({ code: 'en', name: 'English' });
   const [isAnalysing, setIsAnalysing] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [weatherData, setWeatherData] = useState<WeatherAlertResponse | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [isUIActive, setIsUIActive] = useState(false);
+  const [isSunlightMode, setIsSunlightMode] = useState(() => {
+    return localStorage.getItem('sunlight-mode') === 'true';
+  });
+  const [isWeatherDataLoading, setIsWeatherDataLoading] = useState(true);
 
   useEffect(() => {
-    // Register Service Worker
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW failed', err));
-      });
+    localStorage.setItem('sunlight-mode', isSunlightMode.toString());
+    if (isSunlightMode) {
+      document.body.classList.add('sunlight-mode');
+    } else {
+      document.body.classList.remove('sunlight-mode');
     }
+  }, [isSunlightMode]);
 
+  useEffect(() => {
     // Initial weather fetch (Delhi coordinates)
-    getWeatherAlerts(28.6139, 77.2090)
+    setIsWeatherDataLoading(true);
+    weatherService.getWeather(28.6139, 77.2090)
       .then(data => setWeatherData(data))
-      .catch(err => console.error('Weather fetch error', err));
+      .catch(err => console.error('Weather fetch error', err))
+      .finally(() => setIsWeatherDataLoading(false));
   }, []);
 
   const addChatMessage = (msg: ChatMessage) => {
@@ -47,7 +62,6 @@ function App() {
   const handleSendMessage = async (text: string) => {
     if (!text.trim()) return;
 
-    // Add user message
     const userMsg: ChatMessage = {
       role: 'user',
       type: 'voice',
@@ -58,8 +72,6 @@ function App() {
 
     try {
       const response = await sendMessage(text, selectedLanguage.name);
-        
-      // Add AI message
       addChatMessage({
         role: 'ai',
         type: 'text',
@@ -83,74 +95,110 @@ function App() {
 
   const getBCP47Language = (code: string) => {
     const map: Record<string, string> = {
-      'en': 'en-US',
-      'hi': 'hi-IN',
-      'pa': 'pa-IN',
-      'gu': 'gu-IN',
-      'mr': 'mr-IN',
-      'kn': 'kn-IN',
-      'ml': 'ml-IN',
-      'ta': 'ta-IN',
-      'te': 'te-IN',
-      'bn': 'bn-IN',
-      'as': 'as-IN'
+      'en': 'en-US', 'hi': 'hi-IN', 'pa': 'pa-IN', 'gu': 'gu-IN', 'mr': 'mr-IN',
+      'kn': 'kn-IN', 'ml': 'ml-IN', 'ta': 'ta-IN', 'te': 'te-IN', 'bn': 'bn-IN', 'as': 'as-IN'
     };
     return map[code] || 'en-US';
   };
 
-  const onStartRecording = () => {
-    const langCode = getBCP47Language(selectedLanguage.code);
-    speechService.start(
-      langCode,
-      (text) => handleSendMessage(text),
-      (recording) => setIsRecording(recording)
-    );
+  useEffect(() => {
+    if (isUIActive && !isRecording) {
+      const langCode = getBCP47Language(selectedLanguage.code);
+      speechService.start(
+        langCode,
+        (text) => handleSendMessage(text),
+        (recording) => setIsRecording(recording)
+      );
+    }
+    return () => {
+      if (!isUIActive && isRecording) {
+        speechService.stop();
+      }
+    };
+  }, [isUIActive, isRecording, selectedLanguage]);
+
+  const onStartRecording = () => setIsUIActive(true);
+  const onStopRecording = () => {
+    setIsUIActive(false);
+    speechService.stop();
   };
 
-  const onStopRecording = () => {
-    speechService.stop();
-    setIsRecording(false);
-  };
+  useEffect(() => {
+    return () => setIsUIActive(false);
+  }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col max-w-md mx-auto relative shadow-2xl overflow-x-hidden">
-      <Header
-        selectedLanguage={selectedLanguage}
-        setSelectedLanguage={setSelectedLanguage}
-      />
-
-      <main className="flex-grow scroll-smooth">
-        <AlertCard weatherData={weatherData} />
-
-        <HeroActions
+    <div className="min-h-screen bg-zinc-950 flex flex-col items-center">
+      <div className="w-full max-w-md bg-zinc-950 min-h-screen flex flex-col relative shadow-2xl overflow-x-hidden pb-12">
+        <Header
           selectedLanguage={selectedLanguage}
-          isAnalysing={isAnalysing}
-          setIsAnalysing={setIsAnalysing}
-          addChatMessage={addChatMessage}
-          onVoiceHelp={handleVoiceHelp}
+          setSelectedLanguage={setSelectedLanguage}
+          isSunlightMode={isSunlightMode}
+          setIsSunlightMode={setIsSunlightMode}
         />
 
-        <CropStatus />
+        <main className="flex-grow scroll-smooth px-4 pt-6 pb-32 space-y-6">
+          <section>
+            <ErrorBoundary>
+              {isWeatherDataLoading ? (
+                <SkeletonCard type="weather" />
+              ) : (
+                <AlertCard weatherData={weatherData} isSunlightMode={isSunlightMode} />
+              )}
+            </ErrorBoundary>
+          </section>
 
-        <History />
-      </main>
+          <section>
+            <ErrorBoundary>
+              <QuickActions 
+                onScan={() => setIsAnalysing(true)} 
+                onVoice={handleVoiceHelp} 
+                isSunlightMode={isSunlightMode} 
+              />
+            </ErrorBoundary>
+          </section>
 
-      <ChatOverlay
-        isOpen={isChatOpen}
-        setIsOpen={setIsChatOpen}
-        messages={chatMessages}
-        selectedLanguage={selectedLanguage}
-        isRecording={isRecording}
-        onStartRecording={onStartRecording}
-        onStopRecording={onStopRecording}
-      />
+          <section>
+            <ErrorBoundary>
+              <CropStatus isSunlightMode={isSunlightMode} />
+            </ErrorBoundary>
+          </section>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-gray-800 text-white text-[10px] py-1 text-center font-bold tracking-widest opacity-0 hover:opacity-100 transition-opacity uppercase">
-        Version 1.0.0 • Connected to Gemini AI
+          <section>
+            <ErrorBoundary>
+              <MyCrops isSunlightMode={isSunlightMode} />
+            </ErrorBoundary>
+          </section>
+        </main>
+
+        <BottomNav isSunlightMode={isSunlightMode} />
+
+        <AnimatePresence>
+          {isChatOpen && (
+            <ChatOverlay
+              isOpen={isChatOpen}
+              setIsOpen={setIsChatOpen}
+              messages={chatMessages}
+              selectedLanguage={selectedLanguage}
+              isUIActive={isUIActive}
+              onStartRecording={onStartRecording}
+              onStopRecording={onStopRecording}
+              isSunlightMode={isSunlightMode}
+            />
+          )}
+        </AnimatePresence>
+
+        <ScanningOverlay isVisible={isAnalysing} />
       </div>
-
-      <ScanningOverlay isVisible={isAnalysing} />
     </div>
+  );
+}
+
+function App() {
+  return (
+    <ToastProvider>
+      <AppContent />
+    </ToastProvider>
   );
 }
 
