@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  kisaan-ai:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./uploads:/app/uploads
+      - ./kisaan_ai.db:/app/kisaan_ai.db
+    restart: unless-stopped

@@ -34,3 +34,9 @@ ml/weights/
 # Feature DBs
 chroma_db/
 chroma_db_final/
+
+# Build output
+dist/
+
+# Docker
+*.log
