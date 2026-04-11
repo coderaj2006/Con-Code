@@ -53,6 +53,22 @@ export const sendMessage = async (text: string, language: string): Promise<{ con
   };
 };
 
+// ─── History ─────────────────────────────────────────────────────────────────
+export interface DiagnosisHistoryItem {
+  id: number;
+  timestamp: string;
+  ai_diagnosis: string | null;
+  weather_at_time: string | null;
+  confidence_score: number | null;
+}
+
+export const getFarmerHistory = async (farmerId: number): Promise<DiagnosisHistoryItem[]> => {
+  const response = await fetch(`${API_BASE_URL}/telemetry?farmer_id=${farmerId}`);
+  if (!response.ok) throw new Error('History fetch failed');
+  const data = await response.json();
+  return data.history ?? [];
+};
+
 export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

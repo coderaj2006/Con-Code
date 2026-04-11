@@ -29,7 +29,6 @@ export interface ChatMessage {
 
 function AppContent() {
   const { currentLanguage } = useTranslation();
-  const [isAnalysing, setIsAnalysing] = useState(false);
   const [diagnosisResult, setDiagnosisResult] = useState<OrchestratorResponse | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [weatherData, setWeatherData] = useState<WeatherAlertResponse | null>(null);
@@ -234,7 +233,7 @@ function AppContent() {
           )}
         </AnimatePresence>
 
-        <ScanningOverlay isVisible={isAnalysing} />
+        <ScanningOverlay isVisible={false} />
       </div>
     </div>
   );

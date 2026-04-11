@@ -1,6 +1,6 @@
-import { FC, useRef, useState, ChangeEvent, useEffect } from 'react';
+import { FC, useRef, useState, ChangeEvent } from 'react';
 import { Camera, Mic, ShoppingCart, Info } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useToast } from '../context/ToastContext';
 import { useTranslation } from '../context/TranslationContext';
 import { analyzeCrop } from '../services/api';
