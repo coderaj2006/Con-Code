@@ -12,8 +12,12 @@
   
   --shadow-agri: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   --shadow-agri-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-agri-glow: 0 20px 50px rgba(34, 211, 238, 0.2);
+  
+  --color-neon-agri: #39FF14;
 
   --animate-pulse-red: pulse-red 2s infinite;
+  --animate-shimmer: shimmer 2s infinite linear;
 
   @keyframes pulse-red {
     0%, 100% { 
@@ -25,6 +29,11 @@
       box-shadow: 0 0 0 10px rgba(225, 29, 72, 0); 
     }
   }
+
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
 }
 
 @layer base {
@@ -34,9 +43,9 @@
   }
 
   body {
-    background-color: var(--color-gray-50);
-    color: var(--color-gray-900);
-    antialiased: true;
+    background-color: var(--color-zinc-950);
+    color: var(--color-zinc-400);
+    @apply transition-all duration-[2000ms] antialiased;
     font-family: Inter, system-ui, sans-serif;
   }
 }
@@ -46,16 +55,52 @@
     @apply active:scale-95 transition-transform duration-75;
   }
 
-  .card-agri {
-    @apply bg-white rounded-2xl shadow-agri border border-gray-100 p-4 transition-all hover:shadow-agri-lg;
+  .card-agri-dark {
+    @apply bg-zinc-900/50 backdrop-blur-md border border-zinc-800 rounded-[2.5rem] p-6 transition-all;
+  }
+
+  .status-pill {
+    @apply px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5;
   }
 
   .glass-card {
-    @apply bg-white/80 backdrop-blur-md border border-white/20 rounded-2xl shadow-xl;
+    @apply bg-white/80 backdrop-blur-md border border-white/20 rounded-3xl shadow-xl transition-all duration-500;
   }
 
   .spinner {
     @apply w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin;
+  }
+
+  .skeleton {
+    @apply bg-zinc-800 relative overflow-hidden rounded-xl;
+    background-image: linear-gradient(90deg, var(--color-zinc-800) 25%, var(--color-zinc-700) 50%, var(--color-zinc-800) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  /* Sunlight Mode High-Contrast Overrides */
+  .sunlight-mode {
+    background-color: #000000 !important;
+    color: #FFFFFF !important;
+  }
+
+  .sunlight-mode .card-agri-dark {
+    @apply bg-black border-2 border-white rounded-3xl shadow-none;
+  }
+
+  .sunlight-mode .text-agri-green,
+  .sunlight-mode .text-neon-agri {
+    color: var(--color-neon-agri) !important;
+    @apply font-black;
+  }
+
+  .sunlight-mode .bg-agri-green {
+    @apply bg-black border-4 border-white;
+  }
+
+  .sunlight-mode .text-zinc-400 {
+    color: #FFFFFF !important;
+    @apply opacity-70;
   }
 }
 
@@ -77,3 +122,4 @@
 [lang="hi"], [lang="pa"], [lang="bn"], [lang="gu"], [lang="mr"], [lang="kn"], [lang="ml"], [lang="ta"], [lang="te"], [lang="as"] {
   line-height: 1.6;
 }
+

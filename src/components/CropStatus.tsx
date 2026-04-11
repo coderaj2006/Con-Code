@@ -1,57 +1,75 @@
-import { FC } from 'react';
-import { Droplets, Thermometer, Bug, ChevronRight } from 'lucide-react';
+import { FC, useState, useEffect } from 'react';
+import { Droplets, Thermometer, TestTube, Wind } from 'lucide-react';
 
-const statuses = [
-  {
-    label: 'Soil Moisture',
-    value: 'Good',
-    detail: '72%',
-    icon: <Droplets className="w-6 h-6" />,
-    color: 'text-blue-600',
-    bg: 'bg-blue-100',
-  },
-  {
-    label: 'Temperature',
-    value: '32°C',
-    detail: 'Optimal',
-    icon: <Thermometer className="w-6 h-6" />,
-    color: 'text-orange-600',
-    bg: 'bg-orange-100',
-  },
-  {
-    label: 'Pest Risk',
-    value: 'Low',
-    detail: 'No threats',
-    icon: <Bug className="w-6 h-6" />,
-    color: 'text-green-600',
-    bg: 'bg-green-100',
-  },
+interface CropStatusProps {
+  isSunlightMode?: boolean;
+}
+
+const vitals = [
+  { label: 'Humidity', value: '85%', status: 'High', color: 'bg-red-500/20 text-red-500', icon: Wind },
+  { label: 'Temp', value: '32°C', status: 'Warm', color: 'bg-amber-500/20 text-amber-500', icon: Thermometer },
+  { label: 'Soil pH', value: '6.8', status: 'Good', color: 'bg-emerald-500/20 text-emerald-500', icon: TestTube },
+  { label: 'Moisture', value: '42%', status: 'Good', color: 'bg-emerald-500/20 text-emerald-500', icon: Droplets },
 ];
 
-export const CropStatus: FC = () => {
-  return (
-    <div className="px-4 pb-6">
-      <h2 className="text-lg font-black uppercase tracking-wider mb-4 flex items-center gap-2">
-        <span className="w-1.5 h-6 bg-agri-green rounded-full"></span>
-        Crop Status
-      </h2>
-      <div className="grid grid-cols-1 gap-3">
-        {statuses.map((item, idx) => (
-          <div key={idx} className="card-agri flex items-center justify-between group">
-            <div className="flex items-center gap-4">
-              <div className={`${item.bg} ${item.color} p-3 rounded-2xl`}>
-                {item.icon}
-              </div>
-              <div>
-                <p className="text-gray-500 text-sm font-bold uppercase tracking-tight">{item.label}</p>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-xl font-black text-gray-900">{item.value}</span>
-                  <span className="text-xs font-bold text-gray-400">{item.detail}</span>
-                </div>
-              </div>
+export const CropStatus: FC<CropStatusProps> = ({ isSunlightMode }) => {
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 800);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className={`card-agri-dark ${isSunlightMode ? 'bg-black border-4 border-white' : ''}`}>
+        <h2 className="text-sm font-black uppercase tracking-widest mb-6 flex items-center gap-2 text-white/50">
+          <span className="w-1.5 h-6 rounded-full bg-zinc-800 animate-pulse"></span>
+          Live Field Status
+        </h2>
+        <div className="grid grid-cols-4 gap-2">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="flex flex-col items-center gap-3">
+              <div className="w-12 h-12 skeleton rounded-2xl" />
+              <div className="h-3 w-12 skeleton" />
+              <div className="h-5 w-8 skeleton" />
+              <div className="h-6 w-full skeleton rounded-full" />
             </div>
-            <div className="text-gray-300 group-hover:text-agri-green transition-colors">
-              <ChevronRight className="w-6 h-6" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`card-agri-dark ${isSunlightMode ? 'bg-black border-4 border-white' : ''}`}>
+      <h2 className={`text-sm font-black uppercase tracking-widest mb-6 flex items-center gap-2 ${
+        isSunlightMode ? 'text-white' : 'text-white'
+      }`}>
+        <span className={`w-1.5 h-6 rounded-full ${isSunlightMode ? 'bg-neon-agri' : 'bg-blue-500'}`}></span>
+        Live Field Status
+      </h2>
+
+      <div className="grid grid-cols-4 gap-2">
+        {vitals.map((item, idx) => (
+          <div key={idx} className="flex flex-col items-center">
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-3 border ${
+              isSunlightMode ? 'bg-white text-black border-white' : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+            }`}>
+              <item.icon className="w-6 h-6" />
+            </div>
+            <p className={`text-[10px] font-bold uppercase tracking-tighter mb-1 text-center truncate w-full ${
+              isSunlightMode ? 'text-white' : 'text-zinc-500'
+            }`}>
+              {item.label}
+            </p>
+            <p className={`text-base font-black mb-2 ${isSunlightMode ? 'text-neon-agri' : 'text-white'}`}>
+              {item.value}
+            </p>
+            <div className={`status-pill w-full justify-center ${
+              isSunlightMode ? 'bg-white text-black' : item.color
+            }`}>
+              {item.status}
             </div>
           </div>
         ))}

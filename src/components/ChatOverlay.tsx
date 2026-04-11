@@ -1,15 +1,17 @@
 import { useEffect, useRef, FC } from 'react';
 import { MessageSquare, Camera, Mic, ChevronDown } from 'lucide-react';
 import { ChatMessage } from '../App';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface ChatOverlayProps {
   isOpen: boolean;
   setIsOpen: (val: boolean) => void;
   messages: ChatMessage[];
   selectedLanguage: { code: string; name: string };
-  isRecording: boolean;
+  isUIActive: boolean;
   onStartRecording: () => void;
   onStopRecording: () => void;
+  isSunlightMode?: boolean;
 }
 
 export const ChatOverlay: FC<ChatOverlayProps> = ({
@@ -17,9 +19,10 @@ export const ChatOverlay: FC<ChatOverlayProps> = ({
   setIsOpen,
   messages,
   selectedLanguage,
-  isRecording,
+  isUIActive,
   onStartRecording,
-  onStopRecording
+  onStopRecording,
+  isSunlightMode
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -48,94 +51,160 @@ export const ChatOverlay: FC<ChatOverlayProps> = ({
 
   return (
     <>
-      <button
+      <motion.button
+        initial={{ scale: 0 }}
+        animate={{ scale: isOpen ? 0 : 1 }}
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
         onClick={() => setIsOpen(true)}
-        className={`fixed bottom-6 right-6 w-16 h-16 bg-agri-green text-white rounded-full shadow-2xl flex items-center justify-center z-40 btn-press border-4 border-white transition-transform ${isOpen ? 'scale-0' : 'scale-100'}`}
+        className={`fixed bottom-6 right-6 w-16 h-16 rounded-full shadow-2xl flex items-center justify-center z-40 border-4 transition-all ${
+          isSunlightMode 
+          ? 'bg-black border-white text-neon-agri' 
+          : 'bg-agri-green text-white border-white'
+        }`}
       >
         <MessageSquare className="w-8 h-8" />
-      </button>
+      </motion.button>
 
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 transition-opacity"
-          onClick={() => setIsOpen(false)}
-        />
-      )}
+      <AnimatePresence>
+        {isOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+              onClick={() => setIsOpen(false)}
+            />
 
-      <div className={`fixed bottom-0 left-0 right-0 max-w-md mx-auto bg-white rounded-t-[3rem] shadow-2xl z-50 transition-transform duration-500 ease-out transform ${isOpen ? 'translate-y-0' : 'translate-y-full'}`} style={{ height: '85vh' }}>
-        <div className="flex flex-col items-center pt-3 pb-4 border-b border-gray-50">
-          <ChevronDown className="w-12 h-6 text-gray-200 mb-1" />
-          <h3 className="text-xl font-black text-agri-green">SMART ADVISORY</h3>
-        </div>
-
-        <div ref={scrollRef} className="px-6 h-[calc(100%-160px)] overflow-y-auto pt-6 space-y-6 scroll-smooth">
-          {messages.length === 0 && (
-            <div className="text-center py-12">
-              <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-dashed border-gray-200">
-                <MessageSquare className="w-10 h-10 text-gray-300" />
+            <motion.div 
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className={`fixed bottom-0 left-0 right-0 max-w-md mx-auto rounded-t-[3rem] shadow-2xl z-50 flex flex-col overflow-hidden ${
+                isSunlightMode ? 'bg-black border-t-4 border-x-4 border-white' : 'bg-white'
+              }`} 
+              style={{ height: '85vh' }}
+            >
+              <div className={`flex flex-col items-center pt-3 pb-4 border-b ${
+                isSunlightMode ? 'border-white/20' : 'border-gray-50'
+              }`}>
+                <ChevronDown className={`w-12 h-6 mb-1 ${isSunlightMode ? 'text-white/40' : 'text-gray-200'}`} />
+                <h3 className={`text-xl font-black uppercase tracking-widest ${
+                  isSunlightMode ? 'text-neon-agri' : 'text-agri-green'
+                }`}>AI Advisory</h3>
               </div>
-              <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">No Recent Insights</p>
-              <p className="text-[10px] text-gray-300 mt-1">Scan a plant or ask a question to start</p>
-            </div>
-          )}
 
-          {messages.map((msg, idx) => (
-            <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-              <div className={`${msg.role === 'user' ? 'bg-agri-amber/10 border-agri-amber/20 rounded-tr-none' : 'bg-agri-green text-white rounded-tl-none shadow-lg'} border rounded-2xl px-5 py-4 max-w-[85%]`}>
-                {msg.type === 'analysis' && msg.data ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 border-b border-white/20 pb-2 mb-2">
-                      <span className="text-xs font-black uppercase tracking-widest bg-white/20 px-2 py-0.5 rounded">Diagnosis</span>
-                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${msg.data.urgency_level === 'High' ? 'bg-alert-red' : 'bg-blue-500'}`}>
-                        {msg.data.urgency_level} Risk
-                      </span>
+              <div ref={scrollRef} className={`px-6 h-[calc(100%-160px)] overflow-y-auto pt-6 space-y-6 scroll-smooth ${
+                isSunlightMode ? 'bg-black' : 'bg-white'
+              }`}>
+                {messages.length === 0 && (
+                  <div className="text-center py-12">
+                    <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 border border-dashed ${
+                      isSunlightMode ? 'bg-white/5 border-white/20' : 'bg-gray-50 border-gray-200'
+                    }`}>
+                      <MessageSquare className={`w-10 h-10 ${isSunlightMode ? 'text-white/20' : 'text-gray-300'}`} />
                     </div>
-                    <p className="font-black text-lg leading-tight">{msg.data.disease_name}</p>
-                    <div className="bg-white/10 p-3 rounded-xl border border-white/10">
-                      <p className="text-[10px] font-black uppercase opacity-60 mb-2">Organic Action Plan</p>
-                      <ul className="space-y-1.5">
-                        {msg.data.organic_cure.map((step: string, i: number) => (
-                          <li key={i} className="text-sm flex gap-2">
-                            <span className="font-black text-agri-amber text-xs">{i + 1}.</span>
-                            <span>{step}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    <p className="text-xs opacity-80 italic leading-relaxed">{msg.content}</p>
+                    <p className={`font-bold uppercase tracking-widest text-xs ${isSunlightMode ? 'text-white/40' : 'text-gray-400'}`}>No Recent Insights</p>
                   </div>
-                ) : (
-                  <p className={`${msg.role === 'user' ? 'text-agri-green-dark' : 'text-white'} font-medium`}>
-                    {msg.content}
-                  </p>
                 )}
-              </div>
-              <div className="flex items-center gap-2 mt-2 px-1">
-                <span className="text-[10px] font-bold text-gray-400 uppercase">{msg.role === 'ai' ? 'Kisaan AI' : 'You'} • {msg.timestamp}</span>
-              </div>
-            </div>
-          ))}
-        </div>
 
-        <div className="absolute bottom-0 left-0 right-0 p-6 bg-gray-50 flex items-center gap-4 border-t border-gray-100">
-          <button className="w-14 h-14 bg-white border-2 border-agri-green text-agri-green rounded-2xl flex items-center justify-center btn-press">
-            <Camera className="w-8 h-8 text-agri-green" />
-          </button>
+                {messages.map((msg, idx) => (
+                  <motion.div 
+                    key={idx}
+                    initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={msg.type === 'analysis' ? { type: 'spring', delay: 0.2 } : {}}
+                    className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
+                  >
+                    <div className={`border rounded-2xl px-5 py-4 max-w-[90%] ${
+                      msg.role === 'user' 
+                        ? (isSunlightMode ? 'bg-white/10 border-white text-white' : 'bg-agri-amber/10 border-agri-amber/20 text-agri-green-dark rounded-tr-none') 
+                        : (isSunlightMode ? 'bg-black border-2 border-neon-agri text-white' : 'bg-agri-green text-white border-transparent rounded-tl-none shadow-lg shadow-agri-green/20')
+                    }`}>
+                      {msg.type === 'analysis' && msg.data ? (
+                        <div className="space-y-4">
+                          <div className={`flex items-center gap-2 border-b pb-2 mb-2 ${isSunlightMode ? 'border-white/20' : 'border-white/20'}`}>
+                            <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded ${isSunlightMode ? 'bg-white text-black' : 'bg-white/20'}`}>DIAGNOSIS</span>
+                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${msg.data.urgency_level === 'High' ? 'bg-alert-red' : 'bg-blue-500'}`}>
+                              {msg.data.urgency_level} Risk
+                            </span>
+                          </div>
+                          <p className={`font-black text-2xl leading-none ${isSunlightMode ? 'text-neon-agri' : 'text-white'}`}>{msg.data.disease_name}</p>
+                          <div className={`p-4 rounded-xl border ${isSunlightMode ? 'bg-white/5 border-white/20' : 'bg-white/10 border-white/10'}`}>
+                            <p className="text-[10px] font-black uppercase opacity-60 mb-3">Organic Action Plan</p>
+                            <ul className="space-y-2">
+                              {msg.data.organic_cure.map((step: string, i: number) => (
+                                <li key={i} className="text-sm flex gap-3">
+                                  <span className={`font-black text-xs ${isSunlightMode ? 'text-neon-agri' : 'text-agri-amber'}`}>{i + 1}.</span>
+                                  <span className="font-medium leading-snug">{step}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                          <p className={`text-xs leading-relaxed ${isSunlightMode ? 'text-white' : 'opacity-80 italic'}`}>{msg.content}</p>
+                        </div>
+                      ) : (
+                        <p className="font-bold leading-relaxed">
+                          {msg.content}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-2 px-1">
+                      <span className={`text-[10px] font-bold uppercase ${isSunlightMode ? 'text-white/40' : 'text-gray-400'}`}>{msg.role === 'ai' ? 'Kisaan AI' : 'You'} • {msg.timestamp}</span>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
 
-          <button 
-            onMouseDown={onStartRecording}
-            onMouseUp={onStopRecording}
-            onTouchStart={onStartRecording}
-            onTouchEnd={onStopRecording}
-            className={`flex-grow h-14 rounded-2xl flex items-center justify-center gap-3 btn-press shadow-xl transition-all duration-300 ${isRecording ? 'bg-alert-red scale-105 animate-pulse' : 'bg-agri-green text-white'}`}
-          >
-            <Mic className={`w-7 h-7 ${isRecording ? 'animate-bounce' : ''}`} />
-            <span className="font-black uppercase tracking-widest">
-              {isRecording ? 'Listening...' : 'Hold to Talk'}
-            </span>
-          </button>
-        </div>
-      </div>
+              <div className={`mt-auto p-6 flex items-center gap-4 border-t ${
+                isSunlightMode ? 'bg-black border-white/20' : 'bg-gray-50 border-gray-100'
+              }`}>
+                <motion.button 
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className={`w-14 h-14 rounded-2xl flex items-center justify-center border-2 transition-all shadow-lg ${
+                    isSunlightMode ? 'bg-black border-white text-white' : 'bg-white border-agri-green text-agri-green'
+                  }`}
+                >
+                  <Camera className="w-8 h-8" />
+                </motion.button>
+
+                <motion.button 
+                  onMouseDown={(e) => { e.preventDefault(); onStartRecording(); }}
+                  onMouseUp={(e) => { e.preventDefault(); onStopRecording(); }}
+                  onMouseLeave={(e) => { e.preventDefault(); isUIActive && onStopRecording(); }}
+                  onTouchStart={(e) => { e.preventDefault(); onStartRecording(); }}
+                  onTouchEnd={(e) => { e.preventDefault(); onStopRecording(); }}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`flex-grow h-14 rounded-2xl flex items-center justify-center gap-3 shadow-xl transition-all duration-300 border-2 ${
+                    isUIActive 
+                      ? (isSunlightMode ? 'bg-neon-agri border-white text-black' : 'bg-alert-red border-transparent text-white scale-105') 
+                      : (isSunlightMode ? 'bg-black border-neon-agri text-neon-agri' : 'bg-agri-green border-transparent text-white')
+                  }`}
+                >
+                  <Mic className={`w-7 h-7 ${isUIActive ? 'animate-mic-pulse' : ''}`} />
+                  <span className="font-black uppercase tracking-widest text-sm">
+                    {isUIActive ? 'Listening...' : 'Hold to Talk'}
+                  </span>
+                </motion.button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+      <style>{`
+        @keyframes mic-pulse {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.15); }
+          100% { transform: scale(1); }
+        }
+        .animate-mic-pulse {
+          animation: mic-pulse 1.5s infinite ease-in-out;
+        }
+      `}</style>
     </>
   );
 };
