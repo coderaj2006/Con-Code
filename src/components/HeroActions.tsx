@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, FC, ChangeEvent } from 'react';
 import { Camera, Mic } from 'lucide-react';
-import { analyzeCrop, fileToBase64 } from '../services/api';
+import { analyzeCrop } from '../services/api';
 import { ChatMessage } from '../App';
 
 interface HeroActionsProps {
@@ -57,16 +57,32 @@ export const HeroActions: FC<HeroActionsProps> = ({
     });
 
     try {
-      const base64 = await fileToBase64(file);
-      const result = await analyzeCrop(base64, selectedLanguage.name);
-      
-      addChatMessage({
-        role: 'ai',
-        type: 'analysis',
-        content: result.description,
-        data: result,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      });
+      // Get browser location or default to Delhi
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          await processImage(file, latitude, longitude);
+        },
+        async (error) => {
+          console.warn("Geolocation blocked or failed. Using defaults.", error);
+          await processImage(file, 28.6139, 77.2090);
+        },
+        { timeout: 5000 }
+      );
+
+      const processImage = async (imgFile: File, lat: number, lon: number) => {
+        const result = await analyzeCrop(imgFile, lat, lon, selectedLanguage.name);
+        
+        addChatMessage({
+          role: 'ai',
+          type: 'analysis',
+          content: result.description,
+          data: result,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        });
+        setIsAnalysing(false);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      };
     } catch (error) {
       console.error(error);
       addChatMessage({
@@ -75,8 +91,6 @@ export const HeroActions: FC<HeroActionsProps> = ({
         content: 'Sorry, I failed to analyze the image. Please try again.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       });
-    } finally {
-      setIsAnalysing(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };

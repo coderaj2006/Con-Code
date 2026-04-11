@@ -13,3 +13,7 @@ sqlalchemy
 aiosqlite
 aiofiles
 gTTS
+torch
+torchvision
+scikit-learn
+numpy

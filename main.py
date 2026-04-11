@@ -23,6 +23,7 @@ from gtts import gTTS
 
 from models import init_db, get_db, FarmerProfile, DiagnosisHistory, Notification, ChatSession, ChatMessage
 from fcm_service import send_fcm_notification
+from ml.weather_risk_model import risk_engine
 
 # Load environment variables
 load_dotenv()
@@ -147,19 +148,26 @@ async def fetch_weather_and_alerts(lat: float, lon: float) -> Tuple[Dict[str, An
         current_data = current_resp.json()
         temp = current_data.get("main", {}).get("temp", 0)
         humidity = current_data.get("main", {}).get("humidity", 0)
+        pressure = current_data.get("main", {}).get("pressure", 1010)
+        wind_speed = current_data.get("wind", {}).get("speed", 0)
         
-        reasons = []
-        if humidity > 85: reasons.append(f"High humidity ({humidity}%) detected. Fungal risk.")
-        if temp > 40: reasons.append(f"High temp ({temp}°C) detected. Heat stress risk.")
+        has_alert, reasons = False, []
+        if risk_engine:
+            has_alert, reasons = risk_engine.predict_risk(temp, humidity, pressure, wind_speed)
+        else:
+            if humidity > 85: reasons.append(f"High humidity ({humidity}%) detected. Fungal risk.")
+            if temp > 40: reasons.append(f"High temp ({temp}°C) detected. Heat stress risk.")
+            has_alert = len(reasons) > 0
             
-        return current_data, WeatherAlertState(len(reasons) > 0, reasons)
+        return current_data, WeatherAlertState(has_alert, reasons)
 
 class AgriBrain:
     @staticmethod
     async def analyze(image_b64: str, transcript: Optional[str], previous_context: Optional[str] = None) -> Dict[str, Any]:
         image_data = base64.b64decode(image_b64.split(',', 1)[1] if ',' in image_b64 else image_b64)
-        img = Image.open(io.BytesIO(image_data))
+        img = Image.open(io.BytesIO(image_data)).convert('RGB')
 
+        # Fallback to Gemini (Native CV model integration reserved for teammate)
         model = genai.GenerativeModel('gemini-2.5-flash')
         prompt = "You are an Expert Agronomist. Return ONLY JSON matching schema: {diagnosis:str, confidence:float, immediate_action:list, organic_alternative:str, regional_language_summary:str, market_valuation:str, government_subsidy_hint:str}\n"
         if previous_context: prompt += f"Context: {previous_context}\n"
@@ -173,6 +181,21 @@ class AgriBrain:
 # API Endpoints
 @app.get("/health")
 async def health_check(): return {"status": "healthy"}
+
+@app.get("/weather-alerts")
+async def get_weather_alerts(lat: float, lon: float):
+    try:
+        weather_info, alert_state = await fetch_weather_and_alerts(lat, lon)
+        return {
+            "title": "Weather Alert" if alert_state.has_alert else "Weather Normal",
+            "message": alert_state.reasons[0] if alert_state.has_alert and alert_state.reasons else "Conditions are favorable.",
+            "urgency": "High" if alert_state.has_alert else "Low",
+            "humidity": weather_info.get("current", {}).get("main", {}).get("humidity", 0),
+            "temperature": weather_info.get("current", {}).get("main", {}).get("temp", 0)
+        }
+    except Exception as e:
+        logger.error(f"Weather fetch failed: {e}")
+        return {"title": "Error", "message": "Weather unavailable", "urgency": "N/A", "humidity": 0, "temperature": 0}
 
 @app.post("/analyze/upload", response_model=UnifiedResponse)
 async def analyze_crop_file_upload(

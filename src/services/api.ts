@@ -1,4 +1,4 @@
-const API_BASE_URL = (import.meta as any).env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = (import.meta as any).env.VITE_API_URL || 'http://127.0.0.1:8000';
 
 export interface CropAnalysisResponse {
   disease_name: string;
@@ -15,14 +15,28 @@ export interface WeatherAlertResponse {
   temperature: number;
 }
 
-export const analyzeCrop = async (imageBase64: string, language: string): Promise<CropAnalysisResponse> => {
-  const response = await fetch(`${API_BASE_URL}/analyze-crop`, {
+export const analyzeCrop = async (file: File, lat: number, lon: number, language: string): Promise<CropAnalysisResponse> => {
+  const formData = new FormData();
+  formData.append('image', file);
+  formData.append('lat', lat.toString());
+  formData.append('lon', lon.toString());
+  formData.append('transcript', `Language preference: ${language}`);
+  formData.append('farmer_id', '1');
+
+  const response = await fetch(`${API_BASE_URL}/analyze/upload`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image_base64: imageBase64, language }),
+    body: formData, // No headers needed so browser sets multipart boundary
   });
   if (!response.ok) throw new Error('Analysis failed');
-  return response.json();
+  const result = await response.json();
+  
+  const diagnosisData = result.data.diagnosis;
+  return {
+    disease_name: diagnosisData.diagnosis?.substring(0, 50) + "..." || "Issue Detected",
+    organic_cure: [diagnosisData.organic_alternative || "No organic cure found"],
+    urgency_level: 'High',
+    description: diagnosisData.diagnosis || "Please refer to history."
+  };
 };
 
 export const getWeatherAlerts = async (lat: number, lon: number): Promise<WeatherAlertResponse> => {
@@ -36,7 +50,7 @@ export const sendMessage = async (text: string, language: string): Promise<{ con
   const response = await fetch(`${API_BASE_URL}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text, language }),
+    body: JSON.stringify({ message: text, farmer_id: 1 }), // Fixed payload mismatch: added farmer_id, renamed text to message
   });
   if (!response.ok) {
     console.error('API: Chat failed with status:', response.status);
@@ -44,7 +58,8 @@ export const sendMessage = async (text: string, language: string): Promise<{ con
   }
   const data = await response.json();
   console.log('API: Received response:', data);
-  return data;
+  // Map backend ChatResponse to { content, timestamp } which frontend expects
+  return { content: data.response, timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
 };
 
 export const fileToBase64 = (file: File): Promise<string> => {
