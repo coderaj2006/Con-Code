@@ -6,10 +6,12 @@ import logging
 import datetime
 import uuid
 import aiofiles
+import asyncio
 from typing import Optional, List, Dict, Any, Tuple
-from fastapi import FastAPI, Request, HTTPException, status, UploadFile, File, Form, Depends
+from fastapi import FastAPI, Request, HTTPException, status, UploadFile, File, Form, Depends, BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 import httpx
 from dotenv import load_dotenv
@@ -17,8 +19,9 @@ import google.generativeai as genai
 from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from gtts import gTTS
 
-from models import init_db, get_db, FarmerProfile, DiagnosisHistory
+from models import init_db, get_db, FarmerProfile, DiagnosisHistory, Notification
 
 # Load environment variables
 load_dotenv()
@@ -32,16 +35,19 @@ app = FastAPI(title="Kisaan AI", description="Hackathon MVP for small farmers")
 
 @app.on_event("startup")
 async def startup_event():
-    os.makedirs("uploads", exist_ok=True)
+    os.makedirs("uploads/audio", exist_ok=True)
     await init_db()
+
+# Mount static files so URLs can be accessed by the browser
+app.mount("/static", StaticFiles(directory="uploads"), name="static")
 
 # Configure CORS for Frontend teammates
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins (perfect for hackathon dev)
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all HTTP methods (GET, POST, etc.)
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Configure Gemini
@@ -84,32 +90,42 @@ class AnalyzeResponseData(BaseModel):
     weather_alerts: WeatherAlert
     market_prices: Optional[Dict[str, Any]]
     diagnosis: Dict[str, Any]
+    speech_url: Optional[str] = Field(None, description="URL to the generated Hindi voice MP3 of the advice.")
 
 class UnifiedResponse(BaseModel):
     error: Optional[str] = None
     data: Optional[AnalyzeResponseData] = None
+    
+class VoiceProcessResponse(BaseModel):
+    transcript: str
 
 # Global Exception Handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
-        status_code=status.HTTP_200_OK, # Hackathon stability requirement: never send 500
+        status_code=status.HTTP_200_OK,
         content={"error": str(exc), "data": None}
     )
 
+# Audio Utility
+def _generate_speech_sync(text: str, filename: str, lang: str = 'hi'):
+    tts = gTTS(text=text, lang=lang, slow=False)
+    tts.save(filename)
+
+async def generate_speech(text: str, file_id: str, lang: str = 'hi') -> str:
+    local_path = f"uploads/audio/{file_id}.mp3"
+    await asyncio.to_thread(_generate_speech_sync, text, local_path, lang)
+    return f"http://localhost:8000/static/audio/{file_id}.mp3"
+
 # Mock Mandi Market API Utility
 async def fetch_mandi_prices(crop_name: str) -> Dict[str, Any]:
-    # In a real app, this would hit something like data.gov.in Mandi API.
     crop_name = crop_name.lower()
-    
     mock_db = {
         "tomato": {"min_price": "₹15/kg", "max_price": "₹25/kg", "trend": "stable"},
         "wheat": {"min_price": "₹2125/quintal", "max_price": "₹2200/quintal", "trend": "upward"},
         "rice": {"min_price": "₹2040/quintal", "max_price": "₹2100/quintal", "trend": "stable"},
     }
-    
-    # Default fallback
     prices = mock_db.get(crop_name, {"min_price": "N/A", "max_price": "N/A", "trend": "unknown"})
     return {"crop": crop_name, "market_data": prices}
 
@@ -146,8 +162,38 @@ async def fetch_weather_and_alerts(lat: float, lon: float) -> Tuple[Dict[str, An
             "current": current_data,
             "forecast_preview": forecast_data.get("list", [])[:8]
         }
-        
         return weather_info, alert
+
+# Background Worker for Anomaly Scans
+async def check_weather_anomalies():
+    """
+    Background Task: Scans all users, checks their weather, logs alerts in Notifications DB.
+    Because SQLAlchemy Async Sessions don't map cleanly to background tasks after endpoint closure,
+    we spawn a new local session here.
+    """
+    from models import AsyncSessionLocal
+    logger.info("Executing async weather anomaly background scan for all farmers...")
+    try:
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(FarmerProfile))
+            farmers = result.scalars().all()
+            
+            for farmer in farmers:
+                # We need a lat/lon. For MVP, we mock New Delhi per user if not stored.
+                lat, lon = (28.6139, 77.2090) 
+                
+                try:
+                    _, weather_alerts = await fetch_weather_and_alerts(lat, lon)
+                    if weather_alerts.has_alert:
+                        message = f"ALERT: {weather_alerts.reasons[0]}"
+                        new_noti = Notification(farmer_id=farmer.id, message=message)
+                        db.add(new_noti)
+                        await db.commit()
+                        logger.warning(f"Saved DB Notification for Farmer {farmer.name}: {message}")
+                except Exception as loop_err:
+                    logger.error(f"Error checking weather for Farmer {farmer.id}: {loop_err}")
+    except Exception as e:
+        logger.error(f"Background worker failure: {e}")
 
 # AgriBrain Utility
 class AgriBrain:
@@ -164,9 +210,7 @@ class AgriBrain:
         except Exception as e:
             raise ValueError(f"Invalid base64 image data: {e}")
 
-        # Choose gemini-2.5-flash for the fastest multimodal responses with high free quotas
         model = genai.GenerativeModel('gemini-2.5-flash')
-        
         prompt = f"{PROMPTS['agronomist_system_prompt']}\n\n"
         
         if previous_context:
@@ -184,7 +228,7 @@ Respond ONLY with a JSON object matching this exact schema:
   "immediate_action": ["Step 1", "Step 2"],
   "organic_alternative": "Organic/natural remedy details.",
   "regional_language_summary": "A short summary in standard Hindi.",
-  "market_valuation": "Insight into how this issue might affect market price, knowing current market conditions.",
+  "market_valuation": "Insight into how this issue might affect market price.",
   "government_subsidy_hint": "Any standard Indian Govt subsidies or schemes that might help."
 }
 """
@@ -195,7 +239,6 @@ Respond ONLY with a JSON object matching this exact schema:
             response_text = response_text[7:]
         if response_text.endswith("```"):
             response_text = response_text[:-3]
-            
         response_text = response_text.strip()
         
         try:
@@ -212,6 +255,7 @@ async def health_check():
 
 @app.post("/analyze/upload", response_model=UnifiedResponse)
 async def analyze_crop_file_upload(
+    background_tasks: BackgroundTasks,
     image: UploadFile = File(..., description="The plant image file."),
     lat: float = Form(..., description="Latitude of the farmer's location."),
     lon: float = Form(..., description="Longitude of the farmer's location."),
@@ -226,16 +270,12 @@ async def analyze_crop_file_upload(
     previous_context = None
     market_prices = None
     
-    # 0. Fetch Farmer Context automatically
     if farmer_id:
         result = await db.execute(select(FarmerProfile).where(FarmerProfile.id == farmer_id))
         farmer = result.scalars().first()
         
         if farmer:
-            # 1. Fetch Market Prices
             market_prices = await fetch_mandi_prices(farmer.primary_crop)
-            
-            # 2. Fetch last 7 days history
             seven_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=7)
             hist_result = await db.execute(
                 select(DiagnosisHistory)
@@ -247,15 +287,13 @@ async def analyze_crop_file_upload(
             if latest_history:
                 previous_context = f"Found issue on {latest_history.timestamp.strftime('%Y-%m-%d')}: {latest_history.ai_diagnosis}"
 
-    # 3. Fetch Weather data & verify alerts
     weather_info = {}
-    weather_alerts = WeatherAlert(has_alert=False, reasons=["Weather data unavailable (API key might be activating)"])
+    weather_alerts = WeatherAlert(has_alert=False, reasons=["Weather data unavailable"])
     try:
         weather_info, weather_alerts = await fetch_weather_and_alerts(lat, lon)
     except Exception as e:
-        logger.warning(f"Weather API failed. Skipped weather check: {e}")
+        logger.warning(f"Weather API failed: {e}")
     
-    # 4. Setup Image saving
     file_ext = image.filename.split('.')[-1] if '.' in image.filename else 'jpg'
     file_id = str(uuid.uuid4())
     local_filename = f"uploads/{file_id}.{file_ext}"
@@ -263,14 +301,11 @@ async def analyze_crop_file_upload(
     image_bytes = await image.read()
     image_base64 = base64.b64encode(image_bytes).decode('utf-8')
     
-    # Save purely for history tracking
     async with aiofiles.open(local_filename, 'wb') as out_file:
         await out_file.write(image_bytes)
     
-    # 5. Get AI Diagnosis
     diagnosis_data = await AgriBrain.analyze(image_base64, transcript, previous_context=previous_context)
     
-    # 6. Save to DB History
     if farmer_id:
         summary = diagnosis_data.get('diagnosis', 'No specific diagnosis extracted')
         new_history = DiagnosisHistory(
@@ -281,16 +316,56 @@ async def analyze_crop_file_upload(
         )
         db.add(new_history)
         await db.commit()
-    
-    # 7. Compile final response
+
+    # Audio Pipeline
+    speech_url = None
+    try:
+        hindi_text = diagnosis_data.get("regional_language_summary")
+        if hindi_text:
+            speech_url = await generate_speech(hindi_text, file_id)
+    except Exception as audio_err:
+        logger.error(f"TTS Engine Failed: {audio_err}")
+
+    # Kick off asynchronous background weather checker
+    background_tasks.add_task(check_weather_anomalies)
+
     response_data = AnalyzeResponseData(
         weather_info=weather_info,
         weather_alerts=weather_alerts,
         market_prices=market_prices,
-        diagnosis=diagnosis_data
+        diagnosis=diagnosis_data,
+        speech_url=speech_url
     )
-    
     return UnifiedResponse(data=response_data, error=None)
 
-# Entry point instructions:
+@app.post("/process-voice", response_model=VoiceProcessResponse)
+async def process_voice(
+    audio: UploadFile = File(..., description="The raw voice recording (.wav, .m4a, .mp3)")
+):
+    """
+    Natively streams audio into Gemini to transcribe local dialects into standard plain-text transcripts.
+    This replaces the need for OpenAI Whisper.
+    """
+    if not GEMINI_API_KEY:
+        raise ValueError("GEMINI_API_KEY is not set.")
+    
+    file_ext = audio.filename.split('.')[-1] if '.' in audio.filename else 'wav'
+    file_id = str(uuid.uuid4())
+    local_filename = f"uploads/audio/{file_id}.{file_ext}"
+    
+    audio_bytes = await audio.read()
+    async with aiofiles.open(local_filename, 'wb') as out_file:
+        await out_file.write(audio_bytes)
+    
+    try:
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        # We process offline to the disk then upload directly to gemini File API
+        gemini_file = await asyncio.to_thread(genai.upload_file, path=local_filename)
+        prompt = "Transcribe the speech in this audio exactly. Do not add any extra commentary or analysis. If it is in hindi or local dialect, translate it accurately to English text."
+        response = await model.generate_content_async([prompt, gemini_file])
+        return VoiceProcessResponse(transcript=response.text.strip())
+    except Exception as e:
+        logger.error(f"Gemini Audio processing failed: {e}")
+        raise ValueError(f"Transcription failed: {str(e)}")
+
 # Run with command: uvicorn main:app --reload
