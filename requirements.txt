@@ -9,3 +9,7 @@ pydantic
 python-dotenv
 Pillow
 python-multipart
+sqlalchemy
+aiosqlite
+aiofiles
+
