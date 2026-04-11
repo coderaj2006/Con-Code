@@ -2,6 +2,7 @@ import { FC } from 'react';
 import { AlertTriangle, MapPin, CloudRain, Wind, Thermometer, Droplets } from 'lucide-react';
 import { WeatherAlertResponse } from '../services/api';
 import { motion } from 'framer-motion';
+import { useTranslation } from '../context/TranslationContext';
 
 interface AlertCardProps {
   weatherData: WeatherAlertResponse | null;
@@ -9,6 +10,7 @@ interface AlertCardProps {
 }
 
 export const AlertCard: FC<AlertCardProps> = ({ weatherData, isSunlightMode }) => {
+  const { t } = useTranslation();
   if (!weatherData) return null;
 
   const isHighRisk = weatherData.urgency === 'High';
@@ -27,18 +29,18 @@ export const AlertCard: FC<AlertCardProps> = ({ weatherData, isSunlightMode }) =
               <AlertTriangle className="w-8 h-8" />
             </div>
             <div>
-              <h3 className="text-base font-black uppercase tracking-widest text-white">Critical Warning</h3>
-              <p className={`text-xs font-bold ${isSunlightMode ? 'text-white/60' : 'text-white/70'}`}>Urgent Action Required</p>
+              <h3 className="text-base font-black uppercase tracking-widest text-white">{t('critical_warning')}</h3>
+              <p className={`text-xs font-bold ${isSunlightMode ? 'text-white/60' : 'text-white/70'}`}>{t('warning_subtitle')}</p>
             </div>
           </div>
           <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
             isSunlightMode ? 'bg-white text-black' : 'bg-red-400/30 text-white border border-red-400/30'
           }`}>Critical</div>
         </div>
-        <p className={`text-2xl font-black leading-tight mb-6 ${isSunlightMode ? 'text-neon-agri' : 'text-white'}`}>{weatherData.message}</p>
+        <p className={`text-2xl font-black leading-tight mb-6 ${isSunlightMode ? 'text-neon-agri' : 'text-white'}`}>{t('warning_body')}</p>
         <div className="flex gap-4 mb-6">
-          <div className="status-pill bg-black/20 text-white border border-white/10">Humidity: {weatherData.humidity}%</div>
-          <div className="status-pill bg-black/20 text-white border border-white/10">Temp: {weatherData.temperature}°C</div>
+          <div className="status-pill bg-black/20 text-white border border-white/10">{t('label_humidity')}: {weatherData.humidity}%</div>
+          <div className="status-pill bg-black/20 text-white border border-white/10">{t('label_temp')}: {weatherData.temperature}°C</div>
         </div>
         <motion.button 
           whileTap={{ scale: 0.95 }}
@@ -46,7 +48,7 @@ export const AlertCard: FC<AlertCardProps> = ({ weatherData, isSunlightMode }) =
             isSunlightMode ? 'bg-white text-black' : 'bg-white text-red-600'
           }`}
         >
-          Act Now
+          {t('act_now')}
         </motion.button>
       </motion.div>
     );
@@ -74,10 +76,10 @@ export const AlertCard: FC<AlertCardProps> = ({ weatherData, isSunlightMode }) =
       </div>
 
       <div className="grid grid-cols-4 gap-2">
-        <WeatherStat label="Humidity" value={`${weatherData.humidity}%`} icon={Droplets} isSunlightMode={isSunlightMode} />
+        <WeatherStat label={t('humidity')} value={`${weatherData.humidity}%`} icon={Droplets} isSunlightMode={isSunlightMode} />
         <WeatherStat label="Wind" value="12km/h" icon={Wind} isSunlightMode={isSunlightMode} />
         <WeatherStat label="UV Index" value="Low" icon={CloudRain} isSunlightMode={isSunlightMode} />
-        <WeatherStat label="Feels Like" value={`${weatherData.temperature + 2}°C`} icon={Thermometer} isSunlightMode={isSunlightMode} />
+        <WeatherStat label={t('temperature')} value={`${weatherData.temperature + 2}°C`} icon={Thermometer} isSunlightMode={isSunlightMode} />
       </div>
     </motion.div>
   );

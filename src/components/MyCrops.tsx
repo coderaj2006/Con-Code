@@ -2,12 +2,14 @@ import { FC, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronRight, Leaf } from 'lucide-react';
 import { cropService, CropData } from '../services/cropService';
+import { useTranslation } from '../context/TranslationContext';
 
 interface MyCropsProps {
   isSunlightMode?: boolean;
 }
 
 export const MyCrops: FC<MyCropsProps> = ({ isSunlightMode }) => {
+  const { t } = useTranslation();
   const [crops, setCrops] = useState<CropData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -24,7 +26,7 @@ export const MyCrops: FC<MyCropsProps> = ({ isSunlightMode }) => {
       <div className={`card-agri-dark ${isSunlightMode ? 'bg-black border-4 border-white' : ''}`}>
         <h2 className="text-sm font-black uppercase tracking-widest mb-6 flex items-center gap-2 text-white">
           <span className={`w-1.5 h-6 rounded-full ${isSunlightMode ? 'bg-neon-agri' : 'bg-agri-green'}`}></span>
-          My Crops
+          {t('my_crops')}
         </h2>
         <div className="space-y-6">
           {[1, 2, 3].map(i => (
@@ -53,7 +55,7 @@ export const MyCrops: FC<MyCropsProps> = ({ isSunlightMode }) => {
         isSunlightMode ? 'text-white' : 'text-white'
       }`}>
         <span className={`w-1.5 h-6 rounded-full ${isSunlightMode ? 'bg-neon-agri' : 'bg-agri-green'}`}></span>
-        My Crops
+        {t('my_crops')}
       </h2>
 
       <div className="space-y-6">
@@ -68,10 +70,10 @@ export const MyCrops: FC<MyCropsProps> = ({ isSunlightMode }) => {
                 </div>
                 <div>
                   <p className={`font-black text-base uppercase tracking-tight ${isSunlightMode ? 'text-neon-agri' : 'text-white'}`}>
-                    {crop.name}
+                    {t(`crop_${crop.id}`)}
                   </p>
                   <p className={`text-[10px] font-bold uppercase ${isSunlightMode ? 'text-white/60' : 'text-zinc-500'}`}>
-                    {crop.lastWatered} • {crop.health}
+                    {crop.lastWatered.replace('ago', t('status_updated_prefix'))} • {t('status_good')}
                   </p>
                 </div>
               </div>
@@ -101,7 +103,7 @@ export const MyCrops: FC<MyCropsProps> = ({ isSunlightMode }) => {
       <button className={`w-full mt-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all ${
         isSunlightMode ? 'bg-white text-black hover:bg-neon-agri' : 'bg-zinc-800 text-white hover:bg-zinc-700'
       }`}>
-        View Detailed Progress
+        {t('view_detailed_progress')}
       </button>
     </div>
   );
