@@ -9,16 +9,32 @@ class WeatherRiskModel:
         self.model = RandomForestClassifier(n_estimators=10, random_state=42)
         self.scaler = StandardScaler()
         
-        # Train on dummy data to fit the architecture and scaler immediately
+        # Train on expanded dummy data so the decision boundary is realistic
+        # In a real scenario, this would load weights via joblib.load('weights.pkl')
         # Features: [Temperature, Humidity, Pressure, Wind_Speed]
         X_dummy = np.array([
-            [25.0, 60.0, 1013.0, 5.0],  # Normal
-            [35.0, 90.0, 1005.0, 2.0],  # High Fungal Risk
-            [42.0, 20.0, 1000.0, 15.0], # High Heat/Drought Risk
-            [20.0, 85.0, 1010.0, 3.0]   # Moderate Fungal Risk
+            # Safe conditions (class 0)
+            [25.0, 60.0, 1013.0, 5.0],
+            [28.0, 55.0, 1012.0, 8.0],
+            [30.0, 65.0, 1010.0, 6.0],
+            [22.0, 50.0, 1015.0, 4.0],
+            [27.0, 70.0, 1011.0, 7.0],
+            [32.0, 45.0, 1009.0, 10.0],
+            [20.0, 40.0, 1014.0, 3.0],
+            [26.0, 36.0, 1012.0, 5.0],   # 36% humidity = SAFE
+            # Heat Stress (class 1) — temp > 40°C
+            [42.0, 20.0, 1000.0, 15.0],
+            [44.0, 25.0, 998.0, 12.0],
+            [41.0, 30.0, 1001.0, 18.0],
+            [45.0, 15.0, 995.0, 20.0],
+            # Fungal Outbreak (class 2) — humidity > 85%
+            [28.0, 92.0, 1005.0, 2.0],
+            [25.0, 88.0, 1008.0, 3.0],
+            [30.0, 95.0, 1003.0, 1.0],
+            [22.0, 90.0, 1006.0, 4.0],
         ])
-        # Classes: 0: Safe, 1: Heat Stress, 2: Fungal Outbreak
-        y_dummy = np.array([0, 2, 1, 2])
+        # Classes: 0=Safe, 1=Heat Stress, 2=Fungal Outbreak
+        y_dummy = np.array([0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2])
         
         self.scaler.fit(X_dummy)
         self.model.fit(self.scaler.transform(X_dummy), y_dummy)

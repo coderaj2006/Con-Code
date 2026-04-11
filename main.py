@@ -8,7 +8,7 @@ import uuid
 import aiofiles
 import asyncio
 from typing import Optional, List, Dict, Any, Tuple
-from fastapi import FastAPI, Request, status, UploadFile, File, Form, Depends
+from fastapi import FastAPI, Request, status, UploadFile, File, Form, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -33,8 +33,19 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize FastAPI
-app = FastAPI(title="Kisaan AI Proactive Loop", description="Hackathon MVP Phase 3 - Autonomous Agri-Assistant")
+# Initialize FastAPI with lifespan
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app):
+    # Startup
+    os.makedirs("uploads/audio", exist_ok=True)
+    await init_db()
+    asyncio.create_task(proactive_weather_monitor())
+    yield
+    # Shutdown (cleanup if needed)
+
+app = FastAPI(title="Kisaan AI Proactive Loop", description="Hackathon MVP Phase 3 - Autonomous Agri-Assistant", lifespan=lifespan)
 
 # Infinite Loop Background Task
 async def proactive_weather_monitor():
@@ -55,7 +66,6 @@ async def proactive_weather_monitor():
                     lat, lon = (farmer.latitude or 28.6139), (farmer.longitude or 77.2090)
                     try:
                         _, weather_alerts = await fetch_weather_and_alerts(lat, lon)
-                        # Instead of just alerting, let's proactively save state if danger exists
                         if weather_alerts.has_alert:
                             title = "⚠️ URGENT WEATHER ALERT"
                             message = weather_alerts.reasons[0]
@@ -66,15 +76,8 @@ async def proactive_weather_monitor():
                         logger.error(f"Failed worker task for farmer {farmer.id}: {loop_e}")
         except Exception as e:
             logger.error(f"Proactive monitor loop fatal crash: {e}")
-            
-        await asyncio.sleep(60) # Sleep for 60 seconds (Hackathon config)
 
-@app.on_event("startup")
-async def startup_event():
-    os.makedirs("uploads/audio", exist_ok=True)
-    await init_db()
-    # Spawn the infinite loop task asynchronously
-    asyncio.create_task(proactive_weather_monitor())
+        await asyncio.sleep(300)  # 5 min interval (was 60s, too aggressive for API quota)
 
 # Mount static files so URLs can be accessed by the browser
 app.mount("/static", StaticFiles(directory="uploads"), name="static")
@@ -195,8 +198,8 @@ async def get_weather_alerts(lat: float, lon: float):
             "title": "Weather Alert" if alert_state.has_alert else "Weather Normal",
             "message": alert_state.reasons[0] if alert_state.has_alert and alert_state.reasons else "Conditions are favorable.",
             "urgency": "High" if alert_state.has_alert else "Low",
-            "humidity": weather_info.get("current", {}).get("main", {}).get("humidity", 0),
-            "temperature": weather_info.get("current", {}).get("main", {}).get("temp", 0)
+            "humidity": weather_info.get("main", {}).get("humidity", 0),
+            "temperature": weather_info.get("main", {}).get("temp", 0)
         }
     except Exception as e:
         logger.error(f"Weather fetch failed: {e}")
@@ -457,29 +460,4 @@ async def get_farmer_history(farmer_id: int, db: AsyncSession = Depends(get_db))
     histories = result.scalars().all()
     return histories
 
-from fastapi import HTTPException
-from orchestrator.agent import run_analysis_workflow
 
-class AnalysisRequest(BaseModel):
-    image_url: str
-    latitude: float
-    longitude: float
-    preferred_language: str
-
-@app.post("/analyze")
-def analyze_crop(request: AnalysisRequest):
-    """
-    Given an image URL, GPS coordinates, and a preferred language, returns a localized, 
-    hyper-specific agricultural advice payload.
-    """
-    result = run_analysis_workflow(
-        image_url=request.image_url,
-        lat=request.latitude,
-        lon=request.longitude,
-        preferred_language=request.preferred_language
-    )
-    
-    if "error" in result:
-        raise HTTPException(status_code=400, detail=result["error"])
-        
-    return result
