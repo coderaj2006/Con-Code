@@ -9,7 +9,7 @@ import aiofiles
 import asyncio
 from typing import Optional, List, Dict, Any, Tuple
 from fastapi import FastAPI, Request, status, UploadFile, File, Form, Depends, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -136,9 +136,23 @@ async def generate_speech(text: str, file_id: str, lang: str = 'hi') -> str:
     await asyncio.to_thread(_generate_speech_sync, text, local_path, lang)
     return f"http://localhost:8000/static/audio/{file_id}.mp3"
 
-# Mock Mandi Market API Utility
+# Mandi Market Price Data (crop-specific mock — replace with real API later)
+MANDI_PRICE_DATA = {
+    "tomato":  {"min_price": "₹12/kg", "max_price": "₹28/kg", "trend": "rising",  "mandi": "Azadpur, Delhi"},
+    "wheat":   {"min_price": "₹22/kg", "max_price": "₹26/kg", "trend": "stable",  "mandi": "Karnal, Haryana"},
+    "rice":    {"min_price": "₹30/kg", "max_price": "₹42/kg", "trend": "stable",  "mandi": "Amritsar, Punjab"},
+    "potato":  {"min_price": "₹8/kg",  "max_price": "₹15/kg", "trend": "falling", "mandi": "Agra, UP"},
+    "onion":   {"min_price": "₹18/kg", "max_price": "₹35/kg", "trend": "rising",  "mandi": "Lasalgaon, Maharashtra"},
+    "cotton":  {"min_price": "₹55/kg", "max_price": "₹72/kg", "trend": "stable",  "mandi": "Rajkot, Gujarat"},
+    "maize":   {"min_price": "₹16/kg", "max_price": "₹22/kg", "trend": "falling", "mandi": "Davangere, Karnataka"},
+    "mustard": {"min_price": "₹48/kg", "max_price": "₹58/kg", "trend": "rising",  "mandi": "Alwar, Rajasthan"},
+    "sugarcane": {"min_price": "₹3/kg", "max_price": "₹4/kg",  "trend": "stable", "mandi": "Muzaffarnagar, UP"},
+}
+DEFAULT_MANDI = {"min_price": "₹15/kg", "max_price": "₹25/kg", "trend": "stable", "mandi": "Local Market"}
+
 async def fetch_mandi_prices(crop_name: str) -> Dict[str, Any]:
-    return {"crop": crop_name, "market_data": {"min_price": "₹15/kg", "max_price": "₹25/kg", "trend": "stable"}}
+    data = MANDI_PRICE_DATA.get(crop_name.lower(), DEFAULT_MANDI)
+    return {"crop": crop_name, "market_data": data}
 
 class WeatherAlertState:
     def __init__(self, has_alert, reasons):
@@ -187,8 +201,51 @@ class AgriBrain:
         return json.loads(text)
 
 # API Endpoints
+@app.get("/", include_in_schema=False)
+async def root():
+    """Redirect root to API docs"""
+    return RedirectResponse(url="/docs")
+
 @app.get("/health")
 async def health_check(): return {"status": "healthy"}
+
+# Farmer Registration
+class FarmerCreate(BaseModel):
+    name: str
+    location: str
+    primary_crop: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    fcm_token: Optional[str] = None
+
+@app.post("/farmers")
+async def register_farmer(farmer: FarmerCreate, db: AsyncSession = Depends(get_db)):
+    """ Register a new farmer profile """
+    new_farmer = FarmerProfile(
+        name=farmer.name,
+        location=farmer.location,
+        primary_crop=farmer.primary_crop,
+        latitude=farmer.latitude,
+        longitude=farmer.longitude,
+        fcm_token=farmer.fcm_token
+    )
+    db.add(new_farmer)
+    await db.commit()
+    await db.refresh(new_farmer)
+    return {"id": new_farmer.id, "name": new_farmer.name, "message": "Farmer registered successfully"}
+
+@app.get("/farmers/{farmer_id}")
+async def get_farmer(farmer_id: int, db: AsyncSession = Depends(get_db)):
+    """ Get farmer profile by ID """
+    result = await db.execute(select(FarmerProfile).where(FarmerProfile.id == farmer_id))
+    farmer = result.scalars().first()
+    if not farmer:
+        raise HTTPException(status_code=404, detail="Farmer not found")
+    return {
+        "id": farmer.id, "name": farmer.name, "location": farmer.location,
+        "primary_crop": farmer.primary_crop, "latitude": farmer.latitude,
+        "longitude": farmer.longitude
+    }
 
 @app.get("/weather-alerts")
 async def get_weather_alerts(lat: float, lon: float):
