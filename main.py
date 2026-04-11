@@ -1,4 +1,5 @@
 import os
+import os
 import io
 import base64
 import json
@@ -427,3 +428,29 @@ async def process_voice_to_text(
         logger.error(f"Voice processing error for Farmer {farmer_id}: {e}", exc_info=True)
         return JSONResponse(status_code=500, content={"error": "Failed to process audio query. Please try typing or check your microphone settings."})
 
+from fastapi import HTTPException
+from orchestrator.agent import run_analysis_workflow
+
+class AnalysisRequest(BaseModel):
+    image_url: str
+    latitude: float
+    longitude: float
+    preferred_language: str
+
+@app.post("/analyze")
+def analyze_crop(request: AnalysisRequest):
+    """
+    Given an image URL, GPS coordinates, and a preferred language, returns a localized, 
+    hyper-specific agricultural advice payload.
+    """
+    result = run_analysis_workflow(
+        image_url=request.image_url,
+        lat=request.latitude,
+        lon=request.longitude,
+        preferred_language=request.preferred_language
+    )
+    
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+        
+    return result
