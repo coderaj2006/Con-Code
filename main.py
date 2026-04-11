@@ -4,8 +4,9 @@ import base64
 import json
 import logging
 from typing import Optional, List, Dict, Any, Tuple
-from fastapi import FastAPI, Request, HTTPException, status
+from fastapi import FastAPI, Request, HTTPException, status, UploadFile, File, Form
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import httpx
 from dotenv import load_dotenv
@@ -21,6 +22,15 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastAPI
 app = FastAPI(title="Kisaan AI", description="Hackathon MVP for small farmers")
+
+# Configure CORS for Frontend teammates
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins (perfect for hackathon dev)
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all HTTP methods (GET, POST, etc.)
+    allow_headers=["*"],  # Allows all headers
+)
 
 # Configure Gemini
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -189,6 +199,40 @@ async def analyze_crop(request: AnalyzeRequest):
     diagnosis_data = await AgriBrain.analyze(request.image_base64, request.transcript)
     
     # 3. Compile final response
+    response_data = AnalyzeResponseData(
+        weather_info=weather_info,
+        weather_alerts=weather_alerts,
+        diagnosis=diagnosis_data
+    )
+    
+    return UnifiedResponse(data=response_data, error=None)
+
+@app.post("/analyze/upload", response_model=UnifiedResponse)
+async def analyze_crop_file_upload(
+    image: UploadFile = File(..., description="The plant image file."),
+    lat: float = Form(..., description="Latitude of the farmer's location."),
+    lon: float = Form(..., description="Longitude of the farmer's location."),
+    transcript: Optional[str] = Form(None, description="Optional voice/text transcript.")
+):
+    """
+    A Frontend-friendly endpoint that accepts standard 'multipart/form-data' file uploads.
+    """
+    # 1. Fetch Weather data & verify alerts (Graceful fail if key is still pending)
+    weather_info = {}
+    weather_alerts = WeatherAlert(has_alert=False, reasons=["Weather data unavailable (API key might be activating)"])
+    try:
+        weather_info, weather_alerts = await fetch_weather_and_alerts(lat, lon)
+    except Exception as e:
+        logger.warning(f"Weather API failed. Skipped weather check: {e}")
+    
+    # 2. Read file contents and encode to Base64 dynamically for AgriBrain
+    image_bytes = await image.read()
+    image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+    
+    # 3. Get AI Diagnosis
+    diagnosis_data = await AgriBrain.analyze(image_base64, transcript)
+    
+    # 4. Compile final response
     response_data = AnalyzeResponseData(
         weather_info=weather_info,
         weather_alerts=weather_alerts,
