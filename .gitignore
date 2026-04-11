@@ -26,6 +26,7 @@ uploads/
 *.db
 response*.json
 *.jpg
+node_modules
 *.pt
 *.pkl
 ml/weights/
