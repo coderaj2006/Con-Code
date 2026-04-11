@@ -217,21 +217,17 @@ function AppContent() {
 
         <BottomNav isSunlightMode={isSunlightMode} />
 
-        <AnimatePresence>
-          {isChatOpen && (
-            <ChatOverlay
-              isOpen={isChatOpen}
-              setIsOpen={setIsChatOpen}
-              messages={chatMessages}
-              selectedLanguage={{ code: currentLanguage, name: '' }}
-              isUIActive={isUIActive}
-              onStartRecording={onStartRecording}
-              onStopRecording={onStopRecording}
-              onSendMessage={handleSendMessage}
-              isSunlightMode={isSunlightMode}
-            />
-          )}
-        </AnimatePresence>
+        <ChatOverlay
+          isOpen={isChatOpen}
+          setIsOpen={setIsChatOpen}
+          messages={chatMessages}
+          selectedLanguage={{ code: currentLanguage, name: '' }}
+          isUIActive={isUIActive}
+          onStartRecording={onStartRecording}
+          onStopRecording={onStopRecording}
+          onSendMessage={handleSendMessage}
+          isSunlightMode={isSunlightMode}
+        />
 
         <ScanningOverlay isVisible={false} />
       </div>
