@@ -24,11 +24,6 @@ from gtts import gTTS
 from models import init_db, get_db, FarmerProfile, DiagnosisHistory, Notification, User
 from fcm_service import send_fcm_notification
 from ml.weather_risk_model import risk_engine
-from auth import (
-    SignupRequest, LoginRequest, TokenResponse,
-    hash_password, verify_password, create_access_token,
-    get_current_farmer_id, get_optional_farmer_id,
-)
 from orchestrator.agent import run_analysis_workflow
 
 load_dotenv()
@@ -165,60 +160,6 @@ async def proactive_weather_monitor():
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled: {exc}", exc_info=True)
     return JSONResponse(status_code=500, content={"error": str(exc), "data": None})
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# AUTH ENDPOINTS
-# ═══════════════════════════════════════════════════════════════════════════════
-
-@app.post("/signup", response_model=TokenResponse, tags=["Auth"])
-async def signup(req: SignupRequest, db: AsyncSession = Depends(get_db)):
-    """Register a new farmer account."""
-    # Check phone not already taken
-    existing = await db.execute(select(User).where(User.phone == req.phone))
-    if existing.scalars().first():
-        raise HTTPException(status_code=400, detail="Phone number already registered.")
-
-    # Create FarmerProfile
-    farmer = FarmerProfile(
-        name=req.name,
-        location=req.location,
-        primary_crop=req.primary_crop,
-        latitude=28.6139,
-        longitude=77.2090,
-    )
-    db.add(farmer)
-    await db.flush()  # get farmer.id
-
-    # Create User with hashed password
-    user = User(
-        phone=req.phone,
-        hashed_password=hash_password(req.password),
-        farmer_id=farmer.id,
-    )
-    db.add(user)
-    await db.commit()
-
-    token = create_access_token(farmer.id, req.name)
-    return TokenResponse(access_token=token, farmer_id=farmer.id, name=req.name)
-
-
-@app.post("/login", response_model=TokenResponse, tags=["Auth"])
-async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
-    """Login with phone + password, returns JWT."""
-    result = await db.execute(select(User).where(User.phone == req.phone))
-    user = result.scalars().first()
-
-    if not user or not verify_password(req.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid phone or password.")
-
-    # Get farmer name
-    farmer_result = await db.execute(select(FarmerProfile).where(FarmerProfile.id == user.farmer_id))
-    farmer = farmer_result.scalars().first()
-    name = farmer.name if farmer else "Farmer"
-
-    token = create_access_token(user.farmer_id, name)
-    return TokenResponse(access_token=token, farmer_id=user.farmer_id, name=name)
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PUBLIC ENDPOINTS
@@ -377,7 +318,7 @@ async def chat_advisory(
     """Protected text chat endpoint."""
     from advisory_agent import get_advice
 
-    result = await db.execute(select(FarmerProfile).where(FarmerProfile.id == farmer_id))
+    result = await db.execute(select(FarmerProfile).where(FarmerProfile.id == req.farmer_id))
     farmer = result.scalars().first()
     lat, lon = (farmer.latitude or 28.6139, farmer.longitude or 77.2090) if farmer else (28.6139, 77.2090)
 

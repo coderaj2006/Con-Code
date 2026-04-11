@@ -1,60 +1,35 @@
-import { FC, useState, useEffect } from 'react';
+import { FC } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronRight, Leaf } from 'lucide-react';
-import { cropService, CropData } from '../services/cropService';
 import { useTranslation } from '../context/TranslationContext';
+import { useAuth } from '../context/AuthContext';
 
 interface MyCropsProps {
   isSunlightMode?: boolean;
 }
 
+const MOCK_CROPS = [
+  { id: 'tomato',   growth: 72, lastWatered: '2 hours ago' },
+  { id: 'wheat',    growth: 45, lastWatered: '1 day ago' },
+  { id: 'potato',   growth: 88, lastWatered: 'Today' },
+];
+
 export const MyCrops: FC<MyCropsProps> = ({ isSunlightMode }) => {
   const { t } = useTranslation();
-  const [crops, setCrops] = useState<CropData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { user } = useAuth();
 
-  useEffect(() => {
-    setIsLoading(true);
-    cropService.fetchMyCrops()
-      .then(data => setCrops(data))
-      .catch(err => console.error('Crop fetch error', err))
-      .finally(() => setIsLoading(false));
-  }, []);
-
-  if (isLoading) {
-    return (
-      <div className={`card-agri-dark ${isSunlightMode ? 'bg-black border-4 border-white' : ''}`}>
-        <h2 className="text-sm font-black uppercase tracking-widest mb-6 flex items-center gap-2 text-white">
-          <span className={`w-1.5 h-6 rounded-full ${isSunlightMode ? 'bg-neon-agri' : 'bg-agri-green'}`}></span>
-          {t('my_crops')}
-        </h2>
-        <div className="space-y-6">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 skeleton rounded-xl" />
-                  <div className="space-y-1">
-                    <div className="h-4 w-24 skeleton" />
-                    <div className="h-3 w-16 skeleton" />
-                  </div>
-                </div>
-                <div className="h-6 w-12 skeleton" />
-              </div>
-              <div className="h-2.5 w-full skeleton rounded-full" />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  // Put the user's primary crop first
+  const crops = user?.crop
+    ? [
+        { id: user.crop.toLowerCase(), growth: 65, lastWatered: 'Today' },
+        ...MOCK_CROPS.filter(c => c.id !== user.crop.toLowerCase()).slice(0, 2),
+      ]
+    : MOCK_CROPS;
 
   return (
     <div className={`card-agri-dark ${isSunlightMode ? 'bg-black border-4 border-white' : ''}`}>
-      <h2 className={`text-sm font-black uppercase tracking-widest mb-6 flex items-center gap-2 ${
-        isSunlightMode ? 'text-white' : 'text-white'
-      }`}>
-        <span className={`w-1.5 h-6 rounded-full ${isSunlightMode ? 'bg-neon-agri' : 'bg-agri-green'}`}></span>
+      <h2 className="text-sm font-black uppercase tracking-widest mb-6 flex items-center gap-2 text-white">
+        <span className={`w-1.5 h-6 rounded-full ${isSunlightMode ? 'bg-neon-agri' : 'bg-agri-green'}`} />
         {t('my_crops')}
       </h2>
 
@@ -70,10 +45,10 @@ export const MyCrops: FC<MyCropsProps> = ({ isSunlightMode }) => {
                 </div>
                 <div>
                   <p className={`font-black text-base uppercase tracking-tight ${isSunlightMode ? 'text-neon-agri' : 'text-white'}`}>
-                    {t(`crop_${crop.id}`)}
+                    {crop.id.charAt(0).toUpperCase() + crop.id.slice(1)}
                   </p>
                   <p className={`text-[10px] font-bold uppercase ${isSunlightMode ? 'text-white/60' : 'text-zinc-500'}`}>
-                    {crop.lastWatered.replace('ago', t('status_updated_prefix'))} • {t('status_good')}
+                    {crop.lastWatered} • {t('status_good')}
                   </p>
                 </div>
               </div>
@@ -84,16 +59,12 @@ export const MyCrops: FC<MyCropsProps> = ({ isSunlightMode }) => {
                 <ChevronRight className={`w-5 h-5 ${isSunlightMode ? 'text-white' : 'text-zinc-600 group-hover:text-emerald-500 transition-colors'}`} />
               </div>
             </div>
-
-            {/* Progress Bar */}
             <div className={`h-2.5 w-full rounded-full overflow-hidden ${isSunlightMode ? 'bg-white/20' : 'bg-zinc-800'}`}>
-              <motion.div 
+              <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: `${crop.growth}%` }}
-                transition={{ duration: 1.5, ease: "easeOut" }}
-                className={`h-full rounded-full ${
-                  isSunlightMode ? 'bg-neon-agri' : 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
-                }`}
+                transition={{ duration: 1.5, ease: 'easeOut' }}
+                className={`h-full rounded-full ${isSunlightMode ? 'bg-neon-agri' : 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]'}`}
               />
             </div>
           </div>

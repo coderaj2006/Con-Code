@@ -6,7 +6,6 @@ import { MyCrops } from './components/MyCrops';
 import { CropStatus } from './components/CropStatus';
 import { ChatOverlay } from './components/ChatOverlay';
 import { BottomNav, NavTab } from './components/BottomNav';
-import { ScanningOverlay } from './components/ScanningOverlay';
 import { WeatherAlertResponse, sendMessage, sendVoiceMessage } from './services/api';
 import { weatherService } from './services/weatherService';
 import { speechService } from './services/speech';
@@ -339,10 +338,7 @@ function AppContent() {
           onSendMessage={handleSendMessage}
           isSunlightMode={isSunlightMode}
         />
-
-        <ScanningOverlay isVisible={false} />
       </div>
-      )}
     </div>
   );
 }
