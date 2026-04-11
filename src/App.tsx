@@ -5,7 +5,7 @@ import { QuickActions } from './components/QuickActions';
 import { MyCrops } from './components/MyCrops';
 import { CropStatus } from './components/CropStatus';
 import { ChatOverlay } from './components/ChatOverlay';
-import { BottomNav } from './components/BottomNav';
+import { BottomNav, NavTab } from './components/BottomNav';
 import { ScanningOverlay } from './components/ScanningOverlay';
 import { WeatherAlertResponse, sendMessage, sendVoiceMessage } from './services/api';
 import { weatherService } from './services/weatherService';
@@ -41,6 +41,7 @@ function AppContent() {
   const [isWeatherDataLoading, setIsWeatherDataLoading] = useState(true);
   const [telemetryHistory, setTelemetryHistory] = useState<any[]>([]);
   const [isSimulationMode, setIsSimulationMode] = useState(false);
+  const [activeTab, setActiveTab] = useState<NavTab>('home');
 
   useEffect(() => {
     localStorage.setItem('sunlight-mode', isSunlightMode.toString());
@@ -53,7 +54,8 @@ function AppContent() {
 
   // --- Backend Handshake + Telemetry Pre-warming ---
   useEffect(() => {
-    fetch('http://localhost:8002/telemetry?farmer_id=1')
+    const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:8002';
+    fetch(`${API_BASE}/telemetry?farmer_id=1`)
       .then(res => {
         if (res.ok) {
           console.log('%c🚀 Kisaan-Sense Connected to Port 8002', 'color: #4ade80; font-size: 14px; font-weight: bold;');
@@ -245,50 +247,71 @@ function AppContent() {
         />
 
         <main className="flex-grow scroll-smooth px-4 pt-6 pb-32 space-y-6">
-          <section>
-            <ErrorBoundary>
-              {isWeatherDataLoading ? (
-                <SkeletonCard type="weather" />
-              ) : (
-                <AlertCard weatherData={weatherData} isSunlightMode={isSunlightMode} />
-              )}
-            </ErrorBoundary>
-          </section>
+          {activeTab === 'home' && (
+            <>
+              <section>
+                <ErrorBoundary>
+                  {isWeatherDataLoading ? (
+                    <SkeletonCard type="weather" />
+                  ) : (
+                    <AlertCard weatherData={weatherData} isSunlightMode={isSunlightMode} />
+                  )}
+                </ErrorBoundary>
+              </section>
 
-          <section>
-            <ErrorBoundary>
-              <AnimatePresence>
-                {diagnosisResult && (
-                  <DiagnosisDisplay 
-                    result={diagnosisResult} 
-                    onClose={() => setDiagnosisResult(null)}
-                    isSunlightMode={isSunlightMode} 
+              <section>
+                <ErrorBoundary>
+                  <AnimatePresence>
+                    {diagnosisResult && (
+                      <DiagnosisDisplay
+                        result={diagnosisResult}
+                        onClose={() => setDiagnosisResult(null)}
+                        isSunlightMode={isSunlightMode}
+                      />
+                    )}
+                  </AnimatePresence>
+                  <QuickActions
+                    onScanClick={() => {}}
+                    onVoice={handleVoiceHelp}
+                    isSunlightMode={isSunlightMode}
+                    setDiagnosisResult={setDiagnosisResult}
                   />
-                )}
-              </AnimatePresence>
-              <QuickActions 
-                onScanClick={() => {}} 
-                onVoice={handleVoiceHelp} 
-                isSunlightMode={isSunlightMode}
-                setDiagnosisResult={setDiagnosisResult}
-              />
-            </ErrorBoundary>
-          </section>
+                </ErrorBoundary>
+              </section>
 
-          <section>
-            <ErrorBoundary>
-              <CropStatus isSunlightMode={isSunlightMode} telemetryHistory={telemetryHistory} isSimulationMode={isSimulationMode} />
-            </ErrorBoundary>
-          </section>
+              <section>
+                <ErrorBoundary>
+                  <CropStatus isSunlightMode={isSunlightMode} telemetryHistory={telemetryHistory} isSimulationMode={isSimulationMode} />
+                </ErrorBoundary>
+              </section>
 
-          <section>
-            <ErrorBoundary>
-              <MyCrops isSunlightMode={isSunlightMode} />
-            </ErrorBoundary>
-          </section>
+              <section>
+                <ErrorBoundary>
+                  <MyCrops isSunlightMode={isSunlightMode} />
+                </ErrorBoundary>
+              </section>
+            </>
+          )}
+
+          {activeTab === 'reports' && (
+            <section>
+              <ErrorBoundary>
+                <CropStatus isSunlightMode={isSunlightMode} telemetryHistory={telemetryHistory} isSimulationMode={isSimulationMode} />
+              </ErrorBoundary>
+            </section>
+          )}
+
+          {(activeTab === 'fields' || activeTab === 'profile') && (
+            <div className="flex flex-col items-center justify-center py-24 gap-4">
+              <span className="text-5xl">🌱</span>
+              <p className={`text-sm font-black uppercase tracking-widest ${isSunlightMode ? 'text-white/40' : 'text-zinc-500'}`}>
+                {activeTab === 'fields' ? 'Fields' : 'Profile'} — Coming Soon
+              </p>
+            </div>
+          )}
         </main>
 
-        <BottomNav isSunlightMode={isSunlightMode} />
+        <BottomNav isSunlightMode={isSunlightMode} activeTab={activeTab} onTabChange={setActiveTab} />
 
         <ChatOverlay
           isOpen={isChatOpen}
