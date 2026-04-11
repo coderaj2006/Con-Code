@@ -38,6 +38,7 @@ function AppContent() {
     return localStorage.getItem('sunlight-mode') === 'true';
   });
   const [isWeatherDataLoading, setIsWeatherDataLoading] = useState(true);
+  const [showDemoWarning] = useState(true); // Mid-Eval Demo Mode
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageAnalysis = async (file: File) => {
@@ -185,7 +186,20 @@ function AppContent() {
               {isWeatherDataLoading ? (
                 <SkeletonCard type="weather" />
               ) : (
-                <AlertCard weatherData={weatherData} isSunlightMode={isSunlightMode} />
+                <div className="space-y-6">
+                  <AlertCard 
+                    weatherData={weatherData} 
+                    isSunlightMode={isSunlightMode} 
+                    forceType={showDemoWarning ? "weather" : undefined} 
+                  />
+                  {showDemoWarning && (
+                    <AlertCard 
+                      weatherData={weatherData} 
+                      isSunlightMode={isSunlightMode} 
+                      forceType="warning" 
+                    />
+                  )}
+                </div>
               )}
             </ErrorBoundary>
           </section>
