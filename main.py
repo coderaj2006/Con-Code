@@ -8,7 +8,7 @@ import uuid
 import aiofiles
 import asyncio
 from typing import Optional, List, Dict, Any, Tuple
-from fastapi import FastAPI, Request, HTTPException, status, UploadFile, File, Form, Depends, BackgroundTasks
+from fastapi import FastAPI, Request, status, UploadFile, File, Form, Depends
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -21,7 +21,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from gtts import gTTS
 
-from models import init_db, get_db, FarmerProfile, DiagnosisHistory, Notification
+from models import init_db, get_db, FarmerProfile, DiagnosisHistory, Notification, ChatSession, ChatMessage
+from fcm_service import send_fcm_notification
 
 # Load environment variables
 load_dotenv()
@@ -31,17 +32,52 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI
-app = FastAPI(title="Kisaan AI", description="Hackathon MVP for small farmers")
+app = FastAPI(title="Kisaan AI Proactive Loop", description="Hackathon MVP Phase 3 - Autonomous Agri-Assistant")
+
+# Infinite Loop Background Task
+async def proactive_weather_monitor():
+    """
+    Runs infinitely. Iterates through farmers, checks weather.
+    If anomalies found, triggers Notification DB and Push Notifications via FCM.
+    """
+    # Wait a few seconds for FastAPI to finish mounting before first run
+    await asyncio.sleep(5)
+    from models import AsyncSessionLocal
+    while True:
+        try:
+            logger.info("Executing async proactive weather monitor cycle...")
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(select(FarmerProfile).where(FarmerProfile.fcm_token.isnot(None)))
+                farmers = result.scalars().all()
+                for farmer in farmers:
+                    lat, lon = (farmer.latitude or 28.6139), (farmer.longitude or 77.2090)
+                    try:
+                        _, weather_alerts = await fetch_weather_and_alerts(lat, lon)
+                        # Instead of just alerting, let's proactively save state if danger exists
+                        if weather_alerts.has_alert:
+                            title = "⚠️ URGENT WEATHER ALERT"
+                            message = weather_alerts.reasons[0]
+                            db.add(Notification(farmer_id=farmer.id, title=title, message=message))
+                            await db.commit()
+                            await send_fcm_notification(farmer.fcm_token, title, message)
+                    except Exception as loop_e:
+                        logger.error(f"Failed worker task for farmer {farmer.id}: {loop_e}")
+        except Exception as e:
+            logger.error(f"Proactive monitor loop fatal crash: {e}")
+            
+        await asyncio.sleep(60) # Sleep for 60 seconds (Hackathon config)
 
 @app.on_event("startup")
 async def startup_event():
     os.makedirs("uploads/audio", exist_ok=True)
     await init_db()
+    # Spawn the infinite loop task asynchronously
+    asyncio.create_task(proactive_weather_monitor())
 
 # Mount static files so URLs can be accessed by the browser
 app.mount("/static", StaticFiles(directory="uploads"), name="static")
 
-# Configure CORS for Frontend teammates
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -55,58 +91,31 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
-# Prompts setup
-PROMPTS = {
-    "agronomist_system_prompt": """
-You are an Expert Indian Agronomist. Your goal is to analyze images of crops and associated transcripts to provide accurate, actionable advice to small farmers.
-Always output the response in strictly valid JSON format matching the requested schema.
-Be concise, practical, and empathetic to the farmer's situation. Focus on identifying diseases, pests, or nutrient deficiencies accurately.
-"""
-}
-
 # Define schemas
-class AnalyzeRequest(BaseModel):
-    image_base64: str = Field(..., description="Base64 encoded string of the plant image.")
-    lat: float = Field(..., description="Latitude of the farmer's location.")
-    lon: float = Field(..., description="Longitude of the farmer's location.")
-    transcript: Optional[str] = Field(None, description="Optional voice/text transcript from the farmer.")
-    farmer_id: Optional[int] = Field(None, description="ID of the farmer for longitudinal tracking.")
-
-class GeminiDiagnosis(BaseModel):
-    diagnosis: str
-    confidence: float
-    immediate_action: List[str]
-    organic_alternative: str
-    regional_language_summary: str
-    market_valuation: str = Field(..., description="A short valuation text based on market prices")
-    government_subsidy_hint: str = Field(..., description="Details on applicable subsidies or schemes")
-
-class WeatherAlert(BaseModel):
-    has_alert: bool
-    reasons: List[str]
-
 class AnalyzeResponseData(BaseModel):
     weather_info: Dict[str, Any]
-    weather_alerts: WeatherAlert
+    weather_alerts: Dict[str, Any]
     market_prices: Optional[Dict[str, Any]]
     diagnosis: Dict[str, Any]
-    speech_url: Optional[str] = Field(None, description="URL to the generated Hindi voice MP3 of the advice.")
+    speech_url: Optional[str]
 
 class UnifiedResponse(BaseModel):
     error: Optional[str] = None
     data: Optional[AnalyzeResponseData] = None
-    
-class VoiceProcessResponse(BaseModel):
-    transcript: str
+
+class ChatRequest(BaseModel):
+    farmer_id: int
+    message: str
+
+class ChatResponse(BaseModel):
+    response: str
+    speech_url: Optional[str] = None
 
 # Global Exception Handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=status.HTTP_200_OK,
-        content={"error": str(exc), "data": None}
-    )
+    return JSONResponse(status_code=status.HTTP_200_OK, content={"error": str(exc), "data": None})
 
 # Audio Utility
 def _generate_speech_sync(text: str, filename: str, lang: str = 'hi'):
@@ -120,252 +129,186 @@ async def generate_speech(text: str, file_id: str, lang: str = 'hi') -> str:
 
 # Mock Mandi Market API Utility
 async def fetch_mandi_prices(crop_name: str) -> Dict[str, Any]:
-    crop_name = crop_name.lower()
-    mock_db = {
-        "tomato": {"min_price": "₹15/kg", "max_price": "₹25/kg", "trend": "stable"},
-        "wheat": {"min_price": "₹2125/quintal", "max_price": "₹2200/quintal", "trend": "upward"},
-        "rice": {"min_price": "₹2040/quintal", "max_price": "₹2100/quintal", "trend": "stable"},
-    }
-    prices = mock_db.get(crop_name, {"min_price": "N/A", "max_price": "N/A", "trend": "unknown"})
-    return {"crop": crop_name, "market_data": prices}
+    return {"crop": crop_name, "market_data": {"min_price": "₹15/kg", "max_price": "₹25/kg", "trend": "stable"}}
 
-# Weather Agent Utility
-async def fetch_weather_and_alerts(lat: float, lon: float) -> Tuple[Dict[str, Any], WeatherAlert]:
+class WeatherAlertState:
+    def __init__(self, has_alert, reasons):
+        self.has_alert = has_alert
+        self.reasons = reasons
+
+async def fetch_weather_and_alerts(lat: float, lon: float) -> Tuple[Dict[str, Any], WeatherAlertState]:
     api_key = os.getenv("OPENWEATHERMAP_API_KEY")
-    if not api_key:
-        raise ValueError("OPENWEATHERMAP_API_KEY is not set.")
-    
     current_url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}&units=metric"
-    forecast_url = f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={api_key}&units=metric"
     
     async with httpx.AsyncClient() as client:
         current_resp = await client.get(current_url)
-        current_resp.raise_for_status()
+        if current_resp.status_code != 200:
+            return {}, WeatherAlertState(False, [])
         current_data = current_resp.json()
-        
-        forecast_resp = await client.get(forecast_url)
-        forecast_resp.raise_for_status()
-        forecast_data = forecast_resp.json()
-        
         temp = current_data.get("main", {}).get("temp", 0)
         humidity = current_data.get("main", {}).get("humidity", 0)
         
         reasons = []
-        if humidity > 85:
-            reasons.append(f"High humidity ({humidity}%) detected. Elevated risk of fungal infections.")
-        if temp > 40:
-            reasons.append(f"Extreme temperature ({temp}°C) detected. High risk of crop heat stress.")
+        if humidity > 85: reasons.append(f"High humidity ({humidity}%) detected. Fungal risk.")
+        if temp > 40: reasons.append(f"High temp ({temp}°C) detected. Heat stress risk.")
             
-        alert = WeatherAlert(has_alert=len(reasons) > 0, reasons=reasons)
-        
-        weather_info = {
-            "current": current_data,
-            "forecast_preview": forecast_data.get("list", [])[:8]
-        }
-        return weather_info, alert
+        return current_data, WeatherAlertState(len(reasons) > 0, reasons)
 
-# Background Worker for Anomaly Scans
-async def check_weather_anomalies():
-    """
-    Background Task: Scans all users, checks their weather, logs alerts in Notifications DB.
-    Because SQLAlchemy Async Sessions don't map cleanly to background tasks after endpoint closure,
-    we spawn a new local session here.
-    """
-    from models import AsyncSessionLocal
-    logger.info("Executing async weather anomaly background scan for all farmers...")
-    try:
-        async with AsyncSessionLocal() as db:
-            result = await db.execute(select(FarmerProfile))
-            farmers = result.scalars().all()
-            
-            for farmer in farmers:
-                # We need a lat/lon. For MVP, we mock New Delhi per user if not stored.
-                lat, lon = (28.6139, 77.2090) 
-                
-                try:
-                    _, weather_alerts = await fetch_weather_and_alerts(lat, lon)
-                    if weather_alerts.has_alert:
-                        message = f"ALERT: {weather_alerts.reasons[0]}"
-                        new_noti = Notification(farmer_id=farmer.id, message=message)
-                        db.add(new_noti)
-                        await db.commit()
-                        logger.warning(f"Saved DB Notification for Farmer {farmer.name}: {message}")
-                except Exception as loop_err:
-                    logger.error(f"Error checking weather for Farmer {farmer.id}: {loop_err}")
-    except Exception as e:
-        logger.error(f"Background worker failure: {e}")
-
-# AgriBrain Utility
 class AgriBrain:
     @staticmethod
     async def analyze(image_b64: str, transcript: Optional[str], previous_context: Optional[str] = None) -> Dict[str, Any]:
-        if not GEMINI_API_KEY:
-            raise ValueError("GEMINI_API_KEY is not set.")
-            
-        try:
-            if ',' in image_b64:
-                image_b64 = image_b64.split(',', 1)[1]
-            image_data = base64.b64decode(image_b64)
-            img = Image.open(io.BytesIO(image_data))
-        except Exception as e:
-            raise ValueError(f"Invalid base64 image data: {e}")
+        image_data = base64.b64decode(image_b64.split(',', 1)[1] if ',' in image_b64 else image_b64)
+        img = Image.open(io.BytesIO(image_data))
 
         model = genai.GenerativeModel('gemini-2.5-flash')
-        prompt = f"{PROMPTS['agronomist_system_prompt']}\n\n"
+        prompt = "You are an Expert Agronomist. Return ONLY JSON matching schema: {diagnosis:str, confidence:float, immediate_action:list, organic_alternative:str, regional_language_summary:str, market_valuation:str, government_subsidy_hint:str}\n"
+        if previous_context: prompt += f"Context: {previous_context}\n"
+        if transcript: prompt += f"Transcript: {transcript}\n"
         
-        if previous_context:
-            prompt += f"--- LONGITUDINAL CONTEXT ---\nThe farmer submitted a scan recently with this diagnosis: {previous_context}\nPlease use this context to determine if the plant is recovering or if the issue has escalated.\n\n"
-        
-        if transcript:
-            prompt += f"Farmer Transcript/Voice Input: \"{transcript}\"\n\n"
-        
-        prompt += """
-Please analyze the image of the plant and the transcript provided.
-Respond ONLY with a JSON object matching this exact schema:
-{
-  "diagnosis": "Detailed explanation of what issues the plant is facing.",
-  "confidence": 0.95,
-  "immediate_action": ["Step 1", "Step 2"],
-  "organic_alternative": "Organic/natural remedy details.",
-  "regional_language_summary": "A short summary in standard Hindi.",
-  "market_valuation": "Insight into how this issue might affect market price.",
-  "government_subsidy_hint": "Any standard Indian Govt subsidies or schemes that might help."
-}
-"""
         response = await model.generate_content_async([prompt, img])
-        
-        response_text = response.text.strip()
-        if response_text.startswith("```json"):
-            response_text = response_text[7:]
-        if response_text.endswith("```"):
-            response_text = response_text[:-3]
-        response_text = response_text.strip()
-        
-        try:
-            parsed_json = json.loads(response_text)
-            GeminiDiagnosis(**parsed_json) 
-            return parsed_json
-        except json.JSONDecodeError:
-            raise Exception(f"Failed to parse JSON from Gemini response. Raw response: {response_text[:100]}...")
+        text = response.text.strip()
+        if text.startswith("```json"): text = text[7:-3].strip()
+        return json.loads(text)
 
 # API Endpoints
-@app.get("/health", response_model=Dict[str, str])
-async def health_check():
-    return {"status": "healthy"}
+@app.get("/health")
+async def health_check(): return {"status": "healthy"}
 
 @app.post("/analyze/upload", response_model=UnifiedResponse)
 async def analyze_crop_file_upload(
-    background_tasks: BackgroundTasks,
-    image: UploadFile = File(..., description="The plant image file."),
-    lat: float = Form(..., description="Latitude of the farmer's location."),
-    lon: float = Form(..., description="Longitude of the farmer's location."),
-    transcript: Optional[str] = Form(None, description="Optional voice/text transcript."),
-    farmer_id: Optional[int] = Form(None, description="ID of the farmer for longitudinal tracking."),
+    image: UploadFile = File(...),
+    lat: float = Form(...),
+    lon: float = Form(...),
+    transcript: Optional[str] = Form(None),
+    farmer_id: Optional[int] = Form(None),
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    A Frontend-friendly endpoint that accepts standard 'multipart/form-data' file uploads.
-    """
-    farmer = None
-    previous_context = None
-    market_prices = None
-    
+    """ Legacy image upload flow """
+    farmer, previous_context, market_prices = None, None, None
     if farmer_id:
         result = await db.execute(select(FarmerProfile).where(FarmerProfile.id == farmer_id))
         farmer = result.scalars().first()
-        
         if farmer:
             market_prices = await fetch_mandi_prices(farmer.primary_crop)
-            seven_days_ago = datetime.datetime.utcnow() - datetime.timedelta(days=7)
-            hist_result = await db.execute(
-                select(DiagnosisHistory)
-                .where(DiagnosisHistory.farmer_id == farmer_id)
-                .where(DiagnosisHistory.timestamp >= seven_days_ago)
-                .order_by(DiagnosisHistory.timestamp.desc())
-            )
-            latest_history = hist_result.scalars().first()
-            if latest_history:
-                previous_context = f"Found issue on {latest_history.timestamp.strftime('%Y-%m-%d')}: {latest_history.ai_diagnosis}"
+            hist = await db.execute(select(DiagnosisHistory).where(DiagnosisHistory.farmer_id == farmer_id).order_by(DiagnosisHistory.timestamp.desc()))
+            latest = hist.scalars().first()
+            if latest: previous_context = latest.ai_diagnosis
 
-    weather_info = {}
-    weather_alerts = WeatherAlert(has_alert=False, reasons=["Weather data unavailable"])
-    try:
-        weather_info, weather_alerts = await fetch_weather_and_alerts(lat, lon)
-    except Exception as e:
-        logger.warning(f"Weather API failed: {e}")
+    weather_info, alert_state = await fetch_weather_and_alerts(lat, lon)
     
-    file_ext = image.filename.split('.')[-1] if '.' in image.filename else 'jpg'
     file_id = str(uuid.uuid4())
-    local_filename = f"uploads/{file_id}.{file_ext}"
-    
+    local_filename = f"uploads/{file_id}.jpg"
     image_bytes = await image.read()
-    image_base64 = base64.b64encode(image_bytes).decode('utf-8')
+    async with aiofiles.open(local_filename, 'wb') as f: await f.write(image_bytes)
     
-    async with aiofiles.open(local_filename, 'wb') as out_file:
-        await out_file.write(image_bytes)
-    
-    diagnosis_data = await AgriBrain.analyze(image_base64, transcript, previous_context=previous_context)
+    diagnosis_data = await AgriBrain.analyze(base64.b64encode(image_bytes).decode('utf-8'), transcript, previous_context)
     
     if farmer_id:
-        summary = diagnosis_data.get('diagnosis', 'No specific diagnosis extracted')
-        new_history = DiagnosisHistory(
-            farmer_id=farmer_id,
-            crop_image_url=local_filename,
-            ai_diagnosis=summary,
-            weather_at_time=json.dumps(weather_info.get("current", {}))
-        )
-        db.add(new_history)
+        db.add(DiagnosisHistory(farmer_id=farmer_id, crop_image_url=local_filename, ai_diagnosis=diagnosis_data.get('diagnosis')))
         await db.commit()
 
-    # Audio Pipeline
     speech_url = None
-    try:
-        hindi_text = diagnosis_data.get("regional_language_summary")
-        if hindi_text:
-            speech_url = await generate_speech(hindi_text, file_id)
-    except Exception as audio_err:
-        logger.error(f"TTS Engine Failed: {audio_err}")
+    if hindi_text := diagnosis_data.get("regional_language_summary"):
+        speech_url = await generate_speech(hindi_text, file_id)
 
-    # Kick off asynchronous background weather checker
-    background_tasks.add_task(check_weather_anomalies)
-
-    response_data = AnalyzeResponseData(
+    return UnifiedResponse(data=AnalyzeResponseData(
         weather_info=weather_info,
-        weather_alerts=weather_alerts,
+        weather_alerts={"has_alert": alert_state.has_alert, "reasons": alert_state.reasons},
         market_prices=market_prices,
         diagnosis=diagnosis_data,
         speech_url=speech_url
-    )
-    return UnifiedResponse(data=response_data, error=None)
+    ))
 
-@app.post("/process-voice", response_model=VoiceProcessResponse)
-async def process_voice(
-    audio: UploadFile = File(..., description="The raw voice recording (.wav, .m4a, .mp3)")
-):
-    """
-    Natively streams audio into Gemini to transcribe local dialects into standard plain-text transcripts.
-    This replaces the need for OpenAI Whisper.
-    """
-    if not GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY is not set.")
+@app.post("/chat", response_model=ChatResponse)
+async def chat_advisory(req: ChatRequest, db: AsyncSession = Depends(get_db)):
+    """ Standalone Multi-turn Advisory Chat """
+    # Fetch or Create Chat Session
+    result = await db.execute(select(ChatSession).where(ChatSession.farmer_id == req.farmer_id).order_by(ChatSession.started_at.desc()))
+    session = result.scalars().first()
+    if not session:
+        session = ChatSession(id=str(uuid.uuid4()), farmer_id=req.farmer_id)
+        db.add(session)
+        await db.commit()
+
+    # Get Historical Context (last 5 messages)
+    msg_result = await db.execute(select(ChatMessage).where(ChatMessage.session_id == session.id).order_by(ChatMessage.timestamp.asc()))
+    history_records = msg_result.scalars().all()[-5:]
     
-    file_ext = audio.filename.split('.')[-1] if '.' in audio.filename else 'wav'
-    file_id = str(uuid.uuid4())
-    local_filename = f"uploads/audio/{file_id}.{file_ext}"
+    # Save incoming user message
+    db.add(ChatMessage(session_id=session.id, role="user", content=req.message))
+    await db.commit()
+
+    # Query Gemini
+    model = genai.GenerativeModel('gemini-2.5-flash')
+    history_arr = [{"role": msg.role, "parts": [msg.content]} for msg in history_records]
+    chat = model.start_chat(history=history_arr)
     
-    audio_bytes = await audio.read()
-    async with aiofiles.open(local_filename, 'wb') as out_file:
-        await out_file.write(audio_bytes)
+    prompt = f"System: You are an Expert Indian Agronomist Advisory Bot. Use simple, non-technical Hindi language. Focus on soil prep, irrigation, and pesticide advice.\nUser: {req.message}"
     
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        # We process offline to the disk then upload directly to gemini File API
-        gemini_file = await asyncio.to_thread(genai.upload_file, path=local_filename)
-        prompt = "Transcribe the speech in this audio exactly. Do not add any extra commentary or analysis. If it is in hindi or local dialect, translate it accurately to English text."
-        response = await model.generate_content_async([prompt, gemini_file])
-        return VoiceProcessResponse(transcript=response.text.strip())
+        resp = await chat.send_message_async(prompt)
+        ai_text = resp.text
     except Exception as e:
-        logger.error(f"Gemini Audio processing failed: {e}")
-        raise ValueError(f"Transcription failed: {str(e)}")
+        logger.error(f"Chat error: {e}")
+        ai_text = "माफ़ करना, मैं अभी आपकी सहायता नहीं कर पा रहा हूँ।"
 
-# Run with command: uvicorn main:app --reload
+    # Save outgoing AI message
+    db.add(ChatMessage(session_id=session.id, role="model", content=ai_text))
+    await db.commit()
+
+    # Synthesize Audio Response
+    speech_url = None
+    try:
+        speech_url = await generate_speech(ai_text, str(uuid.uuid4()))
+    except Exception as e:
+        logger.error(f"Chat TTS error: {e}")
+        
+    return ChatResponse(response=ai_text, speech_url=speech_url)
+
+@app.get("/notifications/{farmer_id}")
+async def get_unread_notifications(farmer_id: int, db: AsyncSession = Depends(get_db)):
+    """ Pull unread proactive notifications for mobile badge updating """
+    result = await db.execute(select(Notification).where(Notification.farmer_id == farmer_id).where(Notification.is_read == False))
+    nots = result.scalars().all()
+    
+    out = []
+    for n in nots:
+        out.append({"id": n.id, "title": n.title, "message": n.message, "timestamp": n.timestamp})
+        n.is_read = True # Mark seen
+    await db.commit()
+    
+    return {"unread_count": len(out), "alerts": out}
+
+@app.post("/process-voice")
+async def process_voice_to_text(
+    audio: UploadFile = File(...),
+    farmer_id: Optional[int] = Form(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Ingests .wav/.m4a, transcribes using Gemini Native Audio API.
+    """
+    try:
+        audio_bytes = await audio.read()
+        
+        # Build the prompt for agriculture transcription
+        # Using gemini-1.5-flash explicitly as it supports audio-to-text natively
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        
+        # Passing audio as a list of parts: [prompt, Part(mime_type, data)]
+        response = await model.generate_content_async([
+            "You are a helpful agricultural assistant. Transcribe the following audio query into English text. If it is in Hindi or a regional Indian dialect, translate it accurately to English. ONLY output the transcribed text, no other conversation.",
+            {
+                "mime_type": audio.content_type or "audio/mpeg",
+                "data": audio_bytes
+            }
+        ])
+        
+        transcript = response.text.strip()
+        logger.info(f"Successfully transcribed voice for Farmer {farmer_id}: {transcript[:50]}...")
+        
+        return {"transcript": transcript}
+    except Exception as e:
+        logger.error(f"Voice processing error for Farmer {farmer_id}: {e}", exc_info=True)
+        return JSONResponse(status_code=500, content={"error": "Failed to process audio query. Please try typing or check your microphone settings."})
+
