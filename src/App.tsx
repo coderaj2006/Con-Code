@@ -16,6 +16,9 @@ import { DiagnosisDisplay, OrchestratorResponse } from './components/DiagnosisDi
 import { ToastProvider } from './context/ToastContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { TranslationProvider, useTranslation } from './context/TranslationContext';
+import { MandiPrices } from './components/MandiPrices';
+import { FieldsTab } from './components/FieldsTab';
+import { ProfileTab } from './components/ProfileTab';
 
 export interface ChatMessage {
   role: 'user' | 'ai';
@@ -281,6 +284,12 @@ function AppContent() {
 
               <section>
                 <ErrorBoundary>
+                  <MandiPrices isSunlightMode={isSunlightMode} />
+                </ErrorBoundary>
+              </section>
+
+              <section>
+                <ErrorBoundary>
                   <CropStatus isSunlightMode={isSunlightMode} telemetryHistory={telemetryHistory} isSimulationMode={isSimulationMode} />
                 </ErrorBoundary>
               </section>
@@ -301,13 +310,20 @@ function AppContent() {
             </section>
           )}
 
-          {(activeTab === 'fields' || activeTab === 'profile') && (
-            <div className="flex flex-col items-center justify-center py-24 gap-4">
-              <span className="text-5xl">🌱</span>
-              <p className={`text-sm font-black uppercase tracking-widest ${isSunlightMode ? 'text-white/40' : 'text-zinc-500'}`}>
-                {activeTab === 'fields' ? 'Fields' : 'Profile'} — Coming Soon
-              </p>
-            </div>
+          {activeTab === 'fields' && (
+            <section>
+              <ErrorBoundary>
+                <FieldsTab isSunlightMode={isSunlightMode} />
+              </ErrorBoundary>
+            </section>
+          )}
+
+          {activeTab === 'profile' && (
+            <section>
+              <ErrorBoundary>
+                <ProfileTab isSunlightMode={isSunlightMode} setIsSunlightMode={setIsSunlightMode} />
+              </ErrorBoundary>
+            </section>
           )}
         </main>
 

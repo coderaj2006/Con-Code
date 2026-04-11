@@ -35,14 +35,31 @@ export const ChatOverlay: FC<ChatOverlayProps> = ({
   }, [messages, isOpen]);
 
   // --- Audio Playback: use backend gTTS speech_url if available ---
+  // We keep a silent AudioContext unlocked on first user gesture to bypass autoplay policy
+  const audioContextRef = useRef<AudioContext | null>(null);
+
+  const unlockAudio = useCallback(() => {
+    if (!audioContextRef.current) {
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    if (audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume();
+    }
+  }, []);
+
   const playAudio = useCallback((url: string) => {
+    unlockAudio();
     try {
       const audio = new Audio(url);
-      audio.play().catch(() => {
-        // Audio blocked by browser autoplay policy — user must interact first
-      });
+      audio.volume = 1.0;
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          // Autoplay still blocked — show replay button (already in UI)
+        });
+      }
     } catch (_e) { /* silent fail */ }
-  }, []);
+  }, [unlockAudio]);
 
   useEffect(() => {
     const lastMessage = messages[messages.length - 1];
@@ -214,10 +231,10 @@ export const ChatOverlay: FC<ChatOverlayProps> = ({
                 </motion.button>
 
                 <motion.button 
-                  onMouseDown={(e) => { e.preventDefault(); onStartRecording(); }}
+                  onMouseDown={(e) => { e.preventDefault(); unlockAudio(); onStartRecording(); }}
                   onMouseUp={(e) => { e.preventDefault(); onStopRecording(); }}
                   onMouseLeave={(e) => { e.preventDefault(); isUIActive && onStopRecording(); }}
-                  onTouchStart={(e) => { e.preventDefault(); onStartRecording(); }}
+                  onTouchStart={(e) => { e.preventDefault(); unlockAudio(); onStartRecording(); }}
                   onTouchEnd={(e) => { e.preventDefault(); onStopRecording(); }}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
