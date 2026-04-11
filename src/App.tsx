@@ -7,7 +7,7 @@ import { CropStatus } from './components/CropStatus';
 import { ChatOverlay } from './components/ChatOverlay';
 import { BottomNav } from './components/BottomNav';
 import { ScanningOverlay } from './components/ScanningOverlay';
-import { WeatherAlertResponse, sendMessage } from './services/api';
+import { WeatherAlertResponse, sendMessage, sendVoiceMessage } from './services/api';
 import { weatherService } from './services/weatherService';
 import { speechService } from './services/speech';
 import { SkeletonCard } from './components/SkeletonCard';
@@ -53,10 +53,10 @@ function AppContent() {
 
   // --- Backend Handshake + Telemetry Pre-warming ---
   useEffect(() => {
-    fetch('http://localhost:8001/telemetry?farmer_id=1')
+    fetch('http://localhost:8002/telemetry?farmer_id=1')
       .then(res => {
         if (res.ok) {
-          console.log('%c🚀 Kisaan-Sense Connected to Port 8001', 'color: #4ade80; font-size: 14px; font-weight: bold;');
+          console.log('%c🚀 Kisaan-Sense Connected to Port 8002', 'color: #4ade80; font-size: 14px; font-weight: bold;');
           return res.json();
         } else {
           console.warn('⚠️ Kisaan-Sense: Backend responded with status', res.status);
@@ -80,17 +80,90 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    // Initial weather fetch (Delhi coordinates)
+    // Dynamic location fetch
     setIsWeatherDataLoading(true);
-    weatherService.getWeather(28.6139, 77.2090)
-      .then(data => setWeatherData(data))
-      .catch(err => console.error('Weather fetch error', err))
-      .finally(() => setIsWeatherDataLoading(false));
+    
+    const fetchWeather = (lat: number, lon: number) => {
+      weatherService.getWeather(lat, lon)
+        .then(data => setWeatherData(data))
+        .catch(err => {
+          console.error('Weather fetch error', err);
+          // Fallback if API fails
+          setWeatherData({
+            title: "Weather Error",
+            message: "Unable to load real-time weather.",
+            urgency: "N/A",
+            humidity: 0,
+            temperature: 0
+          });
+        })
+        .finally(() => setIsWeatherDataLoading(false));
+    };
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          fetchWeather(position.coords.latitude, position.coords.longitude);
+        },
+        () => {
+          console.warn('Geolocation denied. Using default (Delhi).');
+          fetchWeather(28.6139, 77.2090);
+        },
+        { timeout: 5000 }
+      );
+    } else {
+      fetchWeather(28.6139, 77.2090);
+    }
   }, []);
 
   const addChatMessage = (msg: ChatMessage) => {
     setChatMessages(prev => [...prev, msg]);
     if (msg.role === 'ai') setIsChatOpen(true);
+  };
+
+  const handleVoiceResult = async (audioBlob: Blob) => {
+    try {
+      setIsRecording(false);
+      
+      // 1. Show optimistic user message
+      const userMsg: ChatMessage = { 
+        role: 'user', 
+        type: 'voice',
+        content: '🎤 Recording...', 
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+      };
+      setChatMessages(prev => [...prev, userMsg]);
+
+      // 2. Call backend /voice-chat
+      const data = await sendVoiceMessage(audioBlob, currentLanguage);
+      
+      // 3. Update user message with transcript
+      setChatMessages(prev => {
+        const next = [...prev];
+        next[next.length - 1].content = `🎤 ${data.transcript}`;
+        return next;
+      });
+
+      // 4. Add AI response
+      const aiMsg: ChatMessage = {
+        role: 'ai',
+        type: 'text',
+        content: data.content,
+        timestamp: data.timestamp,
+        speech_url: data.speech_url,
+        follow_up_question: data.follow_up_question
+      };
+      setChatMessages(prev => [...prev, aiMsg]);
+      setIsChatOpen(true);
+    } catch (error) {
+      console.error('Voice message failed', error);
+      addChatMessage({
+        role: 'ai',
+        type: 'text',
+        content: 'I had trouble processing your voice query.',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      });
+    }
   };
 
   const handleSendMessage = async (text: string) => {
@@ -127,6 +200,7 @@ function AppContent() {
 
   const handleVoiceHelp = () => {
     setIsChatOpen(true);
+    setIsUIActive(true); // Start recording immediately
   };
 
   const getBCP47Language = (code: string) => {
@@ -138,20 +212,19 @@ function AppContent() {
   };
 
   useEffect(() => {
-    if (isUIActive && !isRecording) {
-      const langCode = getBCP47Language(currentLanguage);
+    if (isUIActive) {
       speechService.start(
-        langCode,
-        (text) => handleSendMessage(text),
+        (blob) => {
+          handleVoiceResult(blob);
+          setIsUIActive(false);
+        },
         (recording) => setIsRecording(recording)
       );
+    } else {
+      speechService.stop();
     }
-    return () => {
-      if (!isUIActive && isRecording) {
-        speechService.stop();
-      }
-    };
-  }, [isUIActive, isRecording, currentLanguage]);
+    return () => speechService.stop();
+  }, [isUIActive]);
 
   const onStartRecording = () => setIsUIActive(true);
   const onStopRecording = () => {

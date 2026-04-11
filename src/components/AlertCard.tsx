@@ -67,7 +67,7 @@ export const AlertCard: FC<AlertCardProps> = ({ weatherData, isSunlightMode }) =
           <h3 className={`text-4xl font-black ${isSunlightMode ? 'text-neon-agri' : 'text-white'}`}>{weatherData.temperature}°C</h3>
           <div className="flex items-center gap-1.5 mt-1 text-zinc-400">
             <MapPin className="w-4 h-4" />
-            <span className="text-xs font-black uppercase tracking-widest">Jodhpur, Rajasthan</span>
+            <span className="text-xs font-black uppercase tracking-widest">{weatherData.city || 'Your Location'}</span>
           </div>
         </div>
         <div className="w-16 h-16 bg-zinc-800 rounded-3xl flex items-center justify-center border border-zinc-700">

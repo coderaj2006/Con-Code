@@ -8,14 +8,14 @@ export const weatherService = {
           const data = await fetchWeatherFromApi(lat, lon);
           resolve(data);
         } catch (error) {
-          // fallback to mock if API fails
-          console.warn('Weather API failed, using mock data');
+          // fallback to generic message if API fails
+          console.warn('Weather API failed, using unavailable status');
           resolve({
-            title: 'Normal Conditions',
-            message: 'Clear skies in Jodhpur. Optimal conditions for harvesting.',
-            urgency: 'Low',
-            humidity: 45,
-            temperature: 32
+            title: 'Location Unavailable',
+            message: 'Waiting for fresh weather data. Please ensure the backend is running.',
+            urgency: 'N/A',
+            humidity: 0,
+            temperature: 0
           });
         }
       }, 800);

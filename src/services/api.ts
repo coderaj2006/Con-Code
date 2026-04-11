@@ -1,4 +1,4 @@
-const API_BASE_URL = (import.meta as any).env.VITE_API_URL || 'http://127.0.0.1:8001';
+const API_BASE_URL = (import.meta as any).env.VITE_API_URL || 'http://127.0.0.1:8002';
 
 import { OrchestratorResponse } from '../components/DiagnosisDisplay';
 
@@ -8,6 +8,7 @@ export interface WeatherAlertResponse {
   urgency: string;
   humidity: number;
   temperature: number;
+  city?: string;
 }
 
 export const analyzeCrop = async (file: File, lat: number, lon: number, language: string): Promise<OrchestratorResponse> => {
@@ -48,6 +49,28 @@ export const sendMessage = async (text: string, language: string): Promise<{ con
   return {
     content: data.response,
     follow_up_question: data.follow_up_question ?? null,
+    speech_url: data.speech_url ?? null,
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+  };
+};
+
+export const sendVoiceMessage = async (audioBlob: Blob, language: string): Promise<{ transcript: string; content: string; timestamp: string; follow_up_question: string | null; speech_url: string | null }> => {
+  const formData = new FormData();
+  formData.append('audio', audioBlob, 'voice_query.wav');
+  formData.append('farmer_id', "1");
+
+  const response = await fetch(`${API_BASE_URL}/voice-chat`, {
+    method: 'POST',
+    body: formData,
+  });
+  
+  if (!response.ok) throw new Error('Voice chat failed');
+  const data = await response.json();
+  
+  return {
+    transcript: data.transcript,
+    content: data.response,
+    follow_up_question: data.notification ?? null,
     speech_url: data.speech_url ?? null,
     timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
   };

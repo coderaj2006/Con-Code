@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 import io
 import base64
 import json
@@ -34,7 +35,67 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI
-app = FastAPI(title="Kisaan AI Proactive Loop", description="Hackathon MVP Phase 3 - Autonomous Agri-Assistant")
+# ---------------------------------------------------------------------------
+# Lifespan context manager — replaces deprecated @app.on_event handlers.
+# FastAPI docs: https://fastapi.tiangolo.com/advanced/events/
+# ---------------------------------------------------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Startup:
+      1. Ensure required runtime directories exist.
+      2. Verify ChromaDB is populated (needs scripts/ingest_data.py to have been run
+         against the /data PDFs — farmerbook.pdf, Field-Crop-Kharif.pdf, etc.).
+      3. Initialise the async SQLite database schema.
+      4. Spawn the proactive weather-monitor background task.
+    Shutdown:
+      Log clean termination so process managers (uvicorn, Docker) know we exited gracefully.
+    """
+    # ── Startup ───────────────────────────────────────────────────────────────
+    # 1. Bootstrap critical runtime directories
+    os.makedirs("uploads", exist_ok=True)
+    os.makedirs("uploads/audio", exist_ok=True)
+    os.makedirs("chroma_db", exist_ok=True)
+
+    # 2. Verify the RAG vector store is populated from /data PDFs
+    chroma_populated = (
+        os.path.isdir("chroma_db")
+        and any(
+            fname != ".gitkeep"
+            for fname in os.listdir("chroma_db")
+        )
+    )
+    if chroma_populated:
+        logger.info(
+            "RAG vector store (ChromaDB) is ready — "
+            "agricultural guides from /data loaded into index."
+        )
+    else:
+        logger.warning(
+            "ChromaDB is EMPTY. Scan diagnosis will fall back to mock RAG context. "
+            "Run `python scripts/ingest_data.py` to index the /data PDFs "
+            "(farmerbook.pdf, Field-Crop-Kharif.pdf, Rice IPM guides, etc.)."
+        )
+
+    # 3. Initialise SQLite schema
+    await init_db()
+
+    # 4. Spawn the infinite proactive weather-monitor loop
+    asyncio.create_task(proactive_weather_monitor())
+
+    logger.info("Kisaan AI startup complete — lifespan ready.")
+
+    yield  # ── Application runs here ─────────────────────────────────────────
+
+    # ── Shutdown ──────────────────────────────────────────────────────────────
+    logger.info("Kisaan AI shutting down gracefully.")
+
+
+app = FastAPI(
+    title="Kisaan AI Proactive Loop",
+    description="Hackathon MVP Phase 3 - Autonomous Agri-Assistant",
+    lifespan=lifespan,
+)
 
 # ---------------------------------------------------------------------------
 # SIMULATION_MODE: Set to False once real Firebase + Agmarknet credentials
@@ -77,20 +138,12 @@ async def proactive_weather_monitor():
             
         await asyncio.sleep(60) # Sleep for 60 seconds (Hackathon config)
 
-@app.on_event("startup")
-async def startup_event():
-    # Ensure all required directories exist (also created at module level below,
-    # but this guard covers any edge-cases hit during async startup)
-    os.makedirs("uploads/audio", exist_ok=True)
-    os.makedirs("chroma_db", exist_ok=True)
-    await init_db()
-    # Spawn the infinite loop task asynchronously
-    asyncio.create_task(proactive_weather_monitor())
+# Startup/shutdown is handled by the lifespan context manager above.
 
 # ---------------------------------------------------------------------------
 # Bootstrap critical runtime directories BEFORE app.mount() is called.
 # app.mount() is evaluated at module-import time, so the directory must
-# already exist — it cannot rely on the async startup_event hook.
+# already exist — it cannot rely on the async lifespan hook.
 # ---------------------------------------------------------------------------
 os.makedirs("uploads", exist_ok=True)          # Static file serving root
 os.makedirs("uploads/audio", exist_ok=True)    # gTTS audio output
@@ -101,7 +154,7 @@ app.mount("/static", StaticFiles(directory="uploads"), name="static")
 # Dedicated audio route — speech_url points here (http://localhost:8001/audio/<file>.mp3)
 app.mount("/audio", StaticFiles(directory="uploads/audio"), name="audio")
 
-# Configure CORS
+# Configure CORS - Allowing all origins for development as requested
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -151,7 +204,7 @@ async def generate_speech(text: str, file_id: str, lang: str = 'hi') -> str:
     local_path = f"uploads/audio/{file_id}.mp3"
     await asyncio.to_thread(_generate_speech_sync, text, local_path, lang)
     # Use port 8001 and the /audio static route (not /static/audio)
-    return f"http://localhost:8001/audio/{file_id}.mp3"
+    return f"http://localhost:8002/audio/{file_id}.mp3"
 
 # Mock Mandi Market API Utility
 async def fetch_mandi_prices(crop_name: str) -> Dict[str, Any]:
@@ -163,28 +216,41 @@ class WeatherAlertState:
         self.reasons = reasons
 
 async def fetch_weather_and_alerts(lat: float, lon: float) -> Tuple[Dict[str, Any], WeatherAlertState]:
-    api_key = os.getenv("OPENWEATHERMAP_API_KEY")
-    current_url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}&units=metric"
-    
-    async with httpx.AsyncClient() as client:
-        current_resp = await client.get(current_url)
-        if current_resp.status_code != 200:
-            return {}, WeatherAlertState(False, [])
-        current_data = current_resp.json()
-        temp = current_data.get("main", {}).get("temp", 0)
-        humidity = current_data.get("main", {}).get("humidity", 0)
-        pressure = current_data.get("main", {}).get("pressure", 1010)
-        wind_speed = current_data.get("wind", {}).get("speed", 0)
+    try:
+        api_key = os.getenv("OPENWEATHERMAP_API_KEY")
+        current_url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}&units=metric"
         
-        has_alert, reasons = False, []
-        if risk_engine:
-            has_alert, reasons = risk_engine.predict_risk(temp, humidity, pressure, wind_speed)
-        else:
-            if humidity > 85: reasons.append(f"High humidity ({humidity}%) detected. Fungal risk.")
-            if temp > 40: reasons.append(f"High temp ({temp}°C) detected. Heat stress risk.")
-            has_alert = len(reasons) > 0
+        async with httpx.AsyncClient() as client:
+            current_resp = await client.get(current_url, timeout=5.0)
+            if current_resp.status_code != 200:
+                logger.warning(f"Weather API returned {current_resp.status_code}")
+                return {}, WeatherAlertState(False, [])
+            current_data = current_resp.json()
             
-        return current_data, WeatherAlertState(has_alert, reasons)
+            # Extract data for risk engine
+            main = current_data.get("main", {})
+            temp = main.get("temp", 0)
+            humidity = main.get("humidity", 0)
+            pressure = main.get("pressure", 1010)
+            wind_speed = current_data.get("wind", {}).get("speed", 0)
+            
+            has_alert, reasons = False, []
+            if risk_engine:
+                try:
+                    has_alert, reasons = risk_engine.predict_risk(temp, humidity, pressure, wind_speed)
+                except Exception as e:
+                    logger.error(f"Risk engine prediction failed: {e}")
+            
+            # Simple fallback rules if risk engine fails or isn't specific enough
+            if not reasons:
+                if humidity > 85: reasons.append(f"High humidity ({humidity}%) detected. Fungal risk.")
+                if temp > 40: reasons.append(f"Extreme heat ({temp}°C) detected. Heat stress risk.")
+                has_alert = len(reasons) > 0
+                
+            return current_data, WeatherAlertState(has_alert, reasons)
+    except Exception as e:
+        logger.error(f"fetch_weather_and_alerts failed: {e}")
+        return {}, WeatherAlertState(False, ["Weather data temporarily unavailable."])
 
 # API Endpoints
 @app.get("/health")
@@ -194,146 +260,96 @@ async def health_check(): return {"status": "healthy"}
 async def get_weather_alerts(lat: float, lon: float):
     try:
         weather_info, alert_state = await fetch_weather_and_alerts(lat, lon)
+        city_name = weather_info.get("name", "your field")
         return {
             "title": "Weather Alert" if alert_state.has_alert else "Weather Normal",
-            "message": alert_state.reasons[0] if alert_state.has_alert and alert_state.reasons else "Conditions are favorable.",
+            "message": alert_state.reasons[0] if alert_state.has_alert and alert_state.reasons else f"Conditions are favorable in {city_name}.",
             "urgency": "High" if alert_state.has_alert else "Low",
-            "humidity": weather_info.get("current", {}).get("main", {}).get("humidity", 0),
-            "temperature": weather_info.get("current", {}).get("main", {}).get("temp", 0)
+            "humidity": weather_info.get("main", {}).get("humidity", 0),
+            "temperature": weather_info.get("main", {}).get("temp", 0),
+            "city": city_name
         }
     except Exception as e:
         logger.error(f"Weather fetch failed: {e}")
         return {"title": "Error", "message": "Weather unavailable", "urgency": "N/A", "humidity": 0, "temperature": 0}
 
-
 @app.post("/chat", response_model=ChatResponse)
 async def chat_advisory(req: ChatRequest, db: AsyncSession = Depends(get_db)):
-    """ Standalone Multi-turn Advisory Chat """
-    # Fetch Farmer Profile
+    """ Standalone Multi-turn Advisory Chat using cohesive Advisory Agent """
+    from advisory_agent import get_advice
+    from models import FarmerProfile
+    from sqlalchemy import select
+    
+    # 1. Fetch Profile for context
     result = await db.execute(select(FarmerProfile).where(FarmerProfile.id == req.farmer_id))
     farmer = result.scalars().first()
+    lat, lon = (farmer.latitude or 28.6139, farmer.longitude or 77.2090) if farmer else (28.6139, 77.2090)
     
-    farmer_context = "Unknown"
-    market_prices = "Unknown"
-    lat, lon = 28.6139, 77.2090
-    if farmer:
-        farmer_context = f"Location: Lat {farmer.latitude}, Long {farmer.longitude}. Primary Crop: {farmer.primary_crop}"
-        lat = farmer.latitude or lat
-        lon = farmer.longitude or lon
-        market_prices = await fetch_mandi_prices(farmer.primary_crop)
-
-    # Fetch Weather
-    weather_info, alert_state = await fetch_weather_and_alerts(lat, lon)
-    weather_context = f"Temp: {weather_info.get('main', {}).get('temp', 'N/A')}°C, Humidity: {weather_info.get('main', {}).get('humidity', 'N/A')}%. Alerts: {', '.join(alert_state.reasons) if alert_state.has_alert else 'None'}."
-
-    # Fetch Longitudinal History (last 7 days scans)
-    hist_result = await db.execute(select(DiagnosisHistory).where(DiagnosisHistory.farmer_id == req.farmer_id).order_by(DiagnosisHistory.timestamp.desc()).limit(7))
-    histories = hist_result.scalars().all()
-    history_context = " | ".join([h.ai_diagnosis for h in histories if h.ai_diagnosis]) or "No previous scans."
-
-    # Fetch Vector Knowledge Base Results
-    rag_hits = await AgriVectorDB.query_agri_knowledge_base(req.message)
-    rag_context = "\n".join(rag_hits) if rag_hits else "No specific RAG data found."
-
-    # Fetch or Create Chat Session
-    session_result = await db.execute(select(ChatSession).where(ChatSession.farmer_id == req.farmer_id).order_by(ChatSession.started_at.desc()))
-    session = session_result.scalars().first()
-    if not session:
-        session = ChatSession(id=str(uuid.uuid4()), farmer_id=req.farmer_id)
-        db.add(session)
-        await db.commit()
-
-    # Get Historical Context (last 5 messages)
-    msg_result = await db.execute(select(ChatMessage).where(ChatMessage.session_id == session.id).order_by(ChatMessage.timestamp.asc()))
-    history_records = msg_result.scalars().all()[-5:]
+    # 2. Get Agentic Advice
+    advice_payload = await get_advice(req.message, lat, lon)
     
-    # Save incoming user message
-    db.add(ChatMessage(session_id=session.id, role="user", content=req.message))
-    await db.commit()
-
-    # Query Gemini
-    model = genai.GenerativeModel('gemini-2.5-flash')
-    history_arr = [{"role": msg.role, "parts": [msg.content]} for msg in history_records]
-    chat = model.start_chat(history=history_arr)
-    
-    prompt = f"""### ROLE
-You are the Lead Architect for Kisaan AI's RAG Pipeline and act as a sympathetic "Dr. Kisaan". You are building a stateful, multi-turn diagnostic agent.
-
-### CONTEXTUAL AWARENESS
-- Farmer Profile: {farmer_context}
-- Current Weather: {weather_context}
-- Longitudinal History: {history_context}
-- Market Data: {market_prices}
-- Knowledge Base Results: {rag_context}
-
-### OPERATIONAL GUIDELINES (GAP ANALYSIS)
-1. DATA RETRIEVAL & INJECTION: You have been provided the Knowledge Base Results and the Farmer's context above. You must use this RAG context to supply accurate 'rag_advice' focused on organic solutions, subsidies, and Kharif/Rabi seasons.
-2. GAP ANALYSIS: Evaluate if the user's problem is missing "Critical Variables" (e.g., if they mention a pest but don't state their irrigation status, or mention crop failure but don't specify the crop type).
-3. ITERATIVE QUESTIONING: If there is missing critical data, you MUST set "agent_state" to "DISCOVERY", and prompt the user in 'follow_up_question' before giving a diagnosis. If data is sufficient, state is "DIAGNOSIS" or "ACTION".
-4. OUTPUT STRUCTURE: Return exactly the JSON schema below.
-
-### RESPONSE STRUCTURE (STRICT JSON)
-Your output must be a valid JSON object matching exactly this schema:
-{{
-  "agent_state": "DISCOVERY|DIAGNOSIS|ACTION",
-  "follow_up_question": "A string asking for the missing critical variable, or null if state is ACTION/DIAGNOSIS.",
-  "rag_advice": "Detailed string containing your synthesis of the Context and User Query. Must use the Knowledge Base Results.",
-  "audio_summary": "A short 2-sentence summary in the user's native regional language.",
-  "language_code": "The exact ISO 639-1 2-letter code for the audio_summary (e.g., 'hi', 'mr', 'ta', 'te', 'gu'). Default 'hi'."
-}}
-
-User Query: {req.message}
-"""
-    
-    try:
-        resp = await chat.send_message_async(prompt)
-        text = resp.text.strip()
-        if text.startswith("```json"):
-            text = text[7:]
-        if text.startswith("```"):
-            text = text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
-        text = text.strip()
-        parsed_resp = json.loads(text)
-        
-        agent_state = parsed_resp.get("agent_state", "ACTION")
-        follow_up_question = parsed_resp.get("follow_up_question", None)
-        rag_advice = parsed_resp.get("rag_advice", "I am sorry, I couldn't process this request.")
-        audio_summary = parsed_resp.get("audio_summary", rag_advice)
-        language_code = parsed_resp.get("language_code", "hi")
-    except Exception as e:
-        logger.error(f"Chat error: {e}")
-        agent_state = "ACTION"
-        follow_up_question = None
-        rag_advice = "माफ़ करना, मैं अभी आपकी सहायता नहीं कर पा रहा हूँ।"
-        audio_summary = rag_advice
-        language_code = "hi"
-        parsed_resp = {
-            "agent_state": agent_state, 
-            "follow_up_question": follow_up_question,
-            "rag_advice": rag_advice,
-            "audio_summary": audio_summary, 
-            "language_code": language_code
-        }
-
-    # Save outgoing AI message (Store JSON string to preserve context for next turns)
-    db.add(ChatMessage(session_id=session.id, role="model", content=json.dumps(parsed_resp)))
-    await db.commit()
-
-        # Synthesize Audio Response strictly from the regional audio summary using the detected lang code
+    # 3. Handle regional speech
     speech_url = None
     try:
-        if audio_summary:
-            speech_url = await generate_speech(audio_summary, str(uuid.uuid4()), lang=language_code)
+        audio_text = advice_payload.get("audio_summary", advice_payload["response"])
+        lang = advice_payload.get("language_code", "hi")
+        speech_url = await generate_speech(audio_text, str(uuid.uuid4()), lang=lang)
     except Exception as e:
         logger.error(f"Chat TTS error: {e}")
         
     return ChatResponse(
-        response=rag_advice,
+        response=advice_payload["response"],
         speech_url=speech_url,
-        follow_up_question=follow_up_question
+        follow_up_question=advice_payload.get("notification") # Using notification as follow-up hint
     )
+
+@app.post("/voice-chat")
+async def voice_chat_advisory(
+    audio: UploadFile = File(...),
+    farmer_id: int = Form(1),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Voice-First Interaction: Audio Blob -> STT -> Advisory Agent -> Response
+    """
+    from advisory_agent import get_advice
+    from models import FarmerProfile
+    from sqlalchemy import select
+    
+    try:
+        # 1. Fetch Location for context
+        result = await db.execute(select(FarmerProfile).where(FarmerProfile.id == farmer_id))
+        farmer = result.scalars().first()
+        lat, lon = (farmer.latitude or 28.6139), (farmer.longitude or 77.2090) if farmer else (28.6139, 77.2090)
+
+        # 2. Speech to Text via Gemini
+        audio_bytes = await audio.read()
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        stt_resp = await model.generate_content_async([
+            "Transcribe this agricultural query exactly. Output ONLY raw text.",
+            {"mime_type": audio.content_type or "audio/mpeg", "data": audio_bytes}
+        ])
+        transcript = stt_resp.text.strip()
+        
+        # 3. Route through Advisory Agent
+        advice_payload = await get_advice(transcript, lat, lon)
+        
+        # 4. Regional TTS
+        speech_url = await generate_speech(
+            advice_payload.get("audio_summary", advice_payload["response"]),
+            str(uuid.uuid4()),
+            lang=advice_payload.get("language_code", "hi")
+        )
+        
+        return {
+            "transcript": transcript,
+            "response": advice_payload["response"],
+            "speech_url": speech_url,
+            "notification": advice_payload.get("notification")
+        }
+    except Exception as e:
+        logger.error(f"Voice Chat error: {e}")
+        return JSONResponse(status_code=500, content={"error": "Voice advisory unavailable."})
 
 @app.get("/notifications/{farmer_id}")
 async def get_unread_notifications(farmer_id: int, db: AsyncSession = Depends(get_db)):
@@ -360,14 +376,10 @@ async def process_voice_to_text(
     """
     try:
         audio_bytes = await audio.read()
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
         
-        # Build the prompt for agriculture transcription
-        # Using gemini-1.5-flash explicitly as it supports audio-to-text natively
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        
-        # Passing audio as a list of parts: [prompt, Part(mime_type, data)]
         response = await model.generate_content_async([
-            "You are an expert transcriber. Transcribe the following agricultural audio query EXACTLY in its original language using the native geographic script (e.g., Devanagari for Hindi, Tamil script for Tamil, Kannada, Marathi, Gujarati, etc.). Do NOT translate the query to English. ONLY output the raw transcribed text.",
+            "Transcribe this agricultural audio EXACTLY in its original language using native script. ONLY output raw transcribed text.",
             {
                 "mime_type": audio.content_type or "audio/mpeg",
                 "data": audio_bytes
@@ -375,12 +387,10 @@ async def process_voice_to_text(
         ])
         
         transcript = response.text.strip()
-        logger.info(f"Successfully transcribed voice for Farmer {farmer_id}: {transcript[:50]}...")
-        
         return {"transcript": transcript}
     except Exception as e:
-        logger.error(f"Voice processing error for Farmer {farmer_id}: {e}", exc_info=True)
-        return JSONResponse(status_code=500, content={"error": "Failed to process audio query. Please try typing or check your microphone settings."})
+        logger.error(f"Voice processing error: {e}")
+        return JSONResponse(status_code=500, content={"error": "Transcription failed."})
 
 from fastapi import HTTPException
 from orchestrator.agent import run_analysis_workflow
@@ -396,35 +406,45 @@ async def analyze_crop(
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Given an image file, GPS coordinates, and a preferred language, returns a localized, 
-    hyper-specific agricultural advice payload matching the Orchestrator schema.
+    Fixed/analyze endpoint per Full System Recovery spec.
     """
-    image_bytes = await image.read()
-    
-    result = await run_analysis_workflow(
-        image_bytes=image_bytes,
-        user_text=transcript or "",
-        lat=lat,
-        lon=lon,
-        preferred_language=preferred_language
-    )
-    
-    if "agent_state" in result and result["agent_state"].get("phase") == "ERROR":
-        raise HTTPException(status_code=400, detail=result["payload"]["diagnosis"])
-    
-    # Background persistence of scan into SQLite
-    if farmer_id:
-        try:
-            db.add(DiagnosisHistory(
-                farmer_id=farmer_id,
-                crop_image_url="uploaded_scan", 
-                ai_diagnosis=result.get("payload", {}).get("diagnosis", "Unknown")
-            ))
-            await db.commit()
-        except Exception as e:
-            logger.error(f"Failed to record diagnostic history: {e}")
+    try:
+        # 1. Read image correctly as bytes
+        image_bytes = await image.read()
+        
+        # 2. Call the agentic workflow
+        result = await run_analysis_workflow(
+            image_bytes=image_bytes,
+            user_text=transcript or "",
+            lat=lat,
+            lon=lon,
+            preferred_language=preferred_language
+        )
+        
+        # 3. Security: agent.py now returns a dict, but we double-check serialization
+        if not isinstance(result, dict):
+            logger.error("Agent returned non-dictionary result")
+            raise HTTPException(status_code=500, detail="Internal processing error")
             
-    return result
+        if "agent_state" in result and result["agent_state"].get("phase") == "ERROR":
+            return JSONResponse(status_code=400, content=result)
+        
+        # Background persistence
+        if farmer_id:
+            try:
+                db.add(DiagnosisHistory(
+                    farmer_id=farmer_id,
+                    crop_image_url="uploaded_scan", 
+                    ai_diagnosis=result.get("payload", {}).get("diagnosis", "Unknown")
+                ))
+                await db.commit()
+            except Exception as e:
+                logger.error(f"Failed to record diagnostic history: {e}")
+                
+        return result
+    except Exception as e:
+        logger.error(f"Critical analyze endpoint failure: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e), "data": None})
 
 @app.get("/telemetry")
 async def fetch_telemetry(farmer_id: int = 1, db: AsyncSession = Depends(get_db)):
@@ -466,3 +486,7 @@ async def fetch_telemetry(farmer_id: int = 1, db: AsyncSession = Depends(get_db)
         "mandi": MOCK_MANDI,
         "history": ui_history
     }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8002, reload=True)

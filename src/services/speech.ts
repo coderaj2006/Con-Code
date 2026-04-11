@@ -1,64 +1,47 @@
-export type SpeechResultCallback = (text: string) => void;
+export type SpeechResultCallback = (audioBlob: Blob) => void;
 export type SpeechStateCallback = (isRecording: boolean) => void;
 
 class SpeechService {
-  private recognition: any;
-  private isSupported: boolean = false;
+  private mediaRecorder: MediaRecorder | null = null;
+  private audioChunks: Blob[] = [];
 
-  constructor() {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    
-    if (SpeechRecognition) {
-      this.recognition = new SpeechRecognition();
-      this.recognition.continuous = true;
-      this.recognition.interimResults = true;
-      this.isSupported = true;
-    } else {
-      console.warn('Speech Recognition is not supported in this browser.');
-    }
-  }
-
-  start(lang: string, onResult: SpeechResultCallback, onStateChange: SpeechStateCallback) {
-    if (!this.isSupported) return;
-
-    let fullTranscript = '';
-    this.recognition.lang = lang;
-    this.recognition.onstart = () => onStateChange(true);
-    this.recognition.onend = () => {
-      onStateChange(false);
-      if (fullTranscript.trim()) {
-        onResult(fullTranscript.trim());
-        fullTranscript = ''; // Reset for next session
-      }
-    };
-    
-    this.recognition.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error);
-      onStateChange(false);
-    };
-
-    this.recognition.onresult = (event: any) => {
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          const transcript = event.results[i][0].transcript;
-          if (transcript.trim()) {
-            console.log('SpeechService: Final result captured:', transcript);
-            onResult(transcript.trim());
-          }
-        }
-      }
-    };
-
+  async start(
+    onResult: SpeechResultCallback, 
+    onStateChange: SpeechStateCallback
+  ) {
     try {
-      this.recognition.start();
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.mediaRecorder = new MediaRecorder(stream);
+      this.audioChunks = [];
+
+      this.mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          this.audioChunks.push(event.data);
+        }
+      };
+
+      this.mediaRecorder.onstart = () => onStateChange(true);
+      
+      this.mediaRecorder.onstop = () => {
+        onStateChange(false);
+        const audioBlob = new Blob(this.audioChunks, { type: 'audio/webm' });
+        if (audioBlob.size > 0) {
+          onResult(audioBlob);
+        }
+        // Stop all tracks to release microphone
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      this.mediaRecorder.start();
     } catch (e) {
-      console.error('Speech recognition failed to start:', e);
+      console.error('Microphone access denied or failing:', e);
+      onStateChange(false);
     }
   }
 
   stop() {
-    if (this.recognition) {
-      this.recognition.stop();
+    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+      this.mediaRecorder.stop();
     }
   }
 }

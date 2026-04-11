@@ -13,9 +13,8 @@ export interface DiagnosisPayload {
   diagnosis: string;
   confidence_score: number;
   sources: string[];
-  disease_name?: string;
-  urgency_level?: 'Low' | 'Medium' | 'High';
-  organic_cure?: string[];
+  organic_remedy: string;
+  chemical_remedy: string;
 }
 
 export interface OrchestratorResponse {
@@ -86,12 +85,6 @@ export const DiagnosisDisplay: FC<DiagnosisDisplayProps> = ({ result, onClose, i
 
       {/* Body */}
       <div className="px-6 py-5 space-y-4">
-        {payload.disease_name && (
-          <p className={`font-black text-2xl leading-none ${isSunlightMode ? 'text-neon-agri' : 'text-agri-green'}`}>
-            {payload.disease_name}
-          </p>
-        )}
-
         <p className={`text-sm leading-relaxed ${isSunlightMode ? 'text-white/80' : 'text-gray-600'}`}>
           {payload.diagnosis}
         </p>
@@ -116,24 +109,34 @@ export const DiagnosisDisplay: FC<DiagnosisDisplayProps> = ({ result, onClose, i
           </div>
         )}
 
-        {/* Organic cure steps */}
-        {payload.organic_cure && payload.organic_cure.length > 0 && (
-          <div className={`p-4 rounded-2xl border ${isSunlightMode ? 'bg-white/5 border-white/20' : 'bg-gray-50 border-gray-100'}`}>
-            <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${isSunlightMode ? 'text-white/50' : 'text-gray-400'}`}>
-              Organic Action Plan
+        {/* Remedies Section */}
+        <div className="grid grid-cols-1 gap-4 mt-6">
+          {/* Organic Remedy */}
+          <div className={`p-4 rounded-3xl border-2 ${isSunlightMode ? 'bg-white/5 border-neon-agri/30' : 'bg-emerald-50 border-emerald-100'}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <div className={`w-2 h-2 rounded-full ${isSunlightMode ? 'bg-neon-agri' : 'bg-emerald-500'}`} />
+              <p className={`text-[11px] font-black uppercase tracking-widest ${isSunlightMode ? 'text-neon-agri' : 'text-emerald-700'}`}>
+                Organic Remedy
+              </p>
+            </div>
+            <p className={`text-sm leading-snug font-medium ${isSunlightMode ? 'text-white' : 'text-gray-700'}`}>
+              {payload.organic_remedy}
             </p>
-            <ul className="space-y-2">
-              {payload.organic_cure.map((step, i) => (
-                <li key={i} className="text-sm flex gap-3">
-                  <span className={`font-black text-xs flex-shrink-0 ${isSunlightMode ? 'text-neon-agri' : 'text-agri-amber'}`}>
-                    {i + 1}.
-                  </span>
-                  <span className={`font-medium leading-snug ${isSunlightMode ? 'text-white' : 'text-gray-700'}`}>{step}</span>
-                </li>
-              ))}
-            </ul>
           </div>
-        )}
+
+          {/* Chemical Remedy */}
+          <div className={`p-4 rounded-3xl border-2 ${isSunlightMode ? 'bg-white/5 border-amber-500/30' : 'bg-amber-50 border-amber-100'}`}>
+            <div className="flex items-center gap-2 mb-2">
+              <div className={`w-2 h-2 rounded-full ${isSunlightMode ? 'bg-amber-500' : 'bg-amber-500'}`} />
+              <p className={`text-[11px] font-black uppercase tracking-widest ${isSunlightMode ? 'text-amber-600' : 'text-amber-700'}`}>
+                Chemical Remedy
+              </p>
+            </div>
+            <p className={`text-sm leading-snug font-medium ${isSunlightMode ? 'text-white' : 'text-gray-700'}`}>
+              {payload.chemical_remedy}
+            </p>
+          </div>
+        </div>
 
         {/* RAG sources */}
         {result.rag_entities?.length > 0 && (
