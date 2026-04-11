@@ -1,18 +1,15 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:8002';
-
 interface AuthUser {
-  farmer_id: number;
   name: string;
-  token: string;
+  crop: string;
+  farmer_id: number;
 }
 
 interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
-  login: (phone: string, password: string) => Promise<void>;
-  signup: (name: string, phone: string, password: string, crop?: string) => Promise<void>;
+  setProfile: (name: string, crop: string) => void;
   logout: () => void;
   getAuthHeaders: () => Record<string, string>;
 }
@@ -23,59 +20,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Restore session from localStorage on mount
   useEffect(() => {
-    const stored = localStorage.getItem('kisaan_auth');
+    const stored = localStorage.getItem('kisaan_user');
     if (stored) {
-      try { setUser(JSON.parse(stored)); } catch { localStorage.removeItem('kisaan_auth'); }
+      try { setUser(JSON.parse(stored)); } catch { localStorage.removeItem('kisaan_user'); }
     }
     setIsLoading(false);
   }, []);
 
-  const login = async (phone: string, password: string) => {
-    const res = await fetch(`${API_BASE}/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, password }),
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || 'Login failed');
-    }
-    const data = await res.json();
-    const authUser: AuthUser = { farmer_id: data.farmer_id, name: data.name, token: data.access_token };
-    setUser(authUser);
-    localStorage.setItem('kisaan_auth', JSON.stringify(authUser));
-  };
-
-  const signup = async (name: string, phone: string, password: string, crop = 'Wheat') => {
-    const res = await fetch(`${API_BASE}/signup`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, phone, password, primary_crop: crop }),
-    });
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.detail || 'Signup failed');
-    }
-    const data = await res.json();
-    const authUser: AuthUser = { farmer_id: data.farmer_id, name: data.name, token: data.access_token };
-    setUser(authUser);
-    localStorage.setItem('kisaan_auth', JSON.stringify(authUser));
+  const setProfile = (name: string, crop: string) => {
+    const u: AuthUser = { name, crop, farmer_id: 1 };
+    setUser(u);
+    localStorage.setItem('kisaan_user', JSON.stringify(u));
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('kisaan_auth');
+    localStorage.removeItem('kisaan_user');
   };
 
-  const getAuthHeaders = (): Record<string, string> => {
-    if (!user) return {};
-    return { Authorization: `Bearer ${user.token}` };
-  };
+  // No JWT — kept for API compatibility, returns empty headers
+  const getAuthHeaders = (): Record<string, string> => ({});
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, signup, logout, getAuthHeaders }}>
+    <AuthContext.Provider value={{ user, isLoading, setProfile, logout, getAuthHeaders }}>
       {children}
     </AuthContext.Provider>
   );

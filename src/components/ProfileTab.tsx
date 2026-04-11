@@ -60,9 +60,9 @@ export const ProfileTab: FC<ProfileTabProps> = ({ isSunlightMode, setIsSunlightM
           <User className={`w-10 h-10 ${isSunlightMode ? 'text-black' : 'text-emerald-900'}`} />
         </div>
         <p className={`font-black text-lg uppercase tracking-widest ${isSunlightMode ? 'text-neon-agri' : 'text-white'}`}>
-          {user?.name || 'Farmer Profile'}
+          {user?.name || 'Farmer'}
         </p>
-        <p className="text-xs font-bold uppercase text-zinc-500">Kisaan AI Member</p>
+        <p className="text-xs font-bold uppercase text-zinc-500">{user?.crop || 'Kisaan AI Member'}</p>
       </div>
 
       {/* Settings */}

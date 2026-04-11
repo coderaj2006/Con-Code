@@ -299,8 +299,8 @@ async def analyze_crop(
     lon: float = Form(...),
     transcript: Optional[str] = Form(None),
     preferred_language: str = Form("en"),
+    farmer_id: Optional[int] = Form(None),
     db: AsyncSession = Depends(get_db),
-    farmer_id: int = Depends(get_current_farmer_id),
 ):
     """
     Protected vision endpoint.
@@ -373,7 +373,6 @@ async def analyze_crop(
 async def chat_advisory(
     req: ChatRequest,
     db: AsyncSession = Depends(get_db),
-    farmer_id: int = Depends(get_current_farmer_id),
 ):
     """Protected text chat endpoint."""
     from advisory_agent import get_advice
@@ -446,10 +445,7 @@ async def voice_chat_advisory(
 
 
 @app.post("/mandi-chat", tags=["Mandi"])
-async def mandi_chat(
-    req: MandiChatRequest,
-    farmer_id: int = Depends(get_current_farmer_id),
-):
+async def mandi_chat(req: MandiChatRequest):
     """
     RAG-powered Mandi price chatbot.
     Returns comparative price analysis across markets.
@@ -468,7 +464,6 @@ async def mandi_chat(
 async def get_unread_notifications(
     farmer_id: int,
     db: AsyncSession = Depends(get_db),
-    _: int = Depends(get_current_farmer_id),
 ):
     result = await db.execute(
         select(Notification)
