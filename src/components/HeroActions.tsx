@@ -60,17 +60,17 @@ export const HeroActions: FC<HeroActionsProps> = ({
     });
 
     try {
-      // Get browser location or default to Delhi
+      // Get browser location or default to Delhi — silent fallback, no UI warning
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const { latitude, longitude } = position.coords;
           await processImage(file, latitude, longitude);
         },
-        async (error) => {
-          console.warn("Geolocation blocked or failed. Using defaults.", error);
+        async (_error) => {
+          // Silent fallback to Jaipur/Delhi defaults — no UI warning shown
           await processImage(file, 28.6139, 77.2090);
         },
-        { timeout: 5000 }
+        { timeout: 10000, enableHighAccuracy: false }
       );
 
       const processImage = async (imgFile: File, lat: number, lon: number) => {
@@ -79,7 +79,8 @@ export const HeroActions: FC<HeroActionsProps> = ({
         addChatMessage({
           role: 'ai',
           type: 'analysis',
-          content: result.description,
+          // Corrected: result.payload.diagnosis is the canonical diagnosis string in the Orchestrator schema
+          content: result?.payload?.diagnosis ?? 'Scan complete. Check the diagnosis panel for full results.',
           data: result,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         });

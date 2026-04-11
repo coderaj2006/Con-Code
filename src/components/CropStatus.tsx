@@ -1,33 +1,27 @@
 import { FC, useState, useEffect } from 'react';
-import { Droplets, Thermometer, TestTube, Wind } from 'lucide-react';
+import { Droplets, Thermometer, TestTube, Wind, FlaskConical } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 
-import { WeatherAlertResponse } from '../services/api';
+interface TelemetryEntry {
+  date: string;
+  type: string;
+  result: string;
+  crop: string;
+}
 
 interface CropStatusProps {
   isSunlightMode?: boolean;
-  weatherData?: WeatherAlertResponse | null;
+  telemetryHistory?: TelemetryEntry[];
+  isSimulationMode?: boolean;
 }
 
-export const CropStatus: FC<CropStatusProps> = ({ isSunlightMode, weatherData }) => {
+export const CropStatus: FC<CropStatusProps> = ({ isSunlightMode, telemetryHistory = [], isSimulationMode = false }) => {
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(true);
 
   const vitals = [
-    { 
-      label: t('humidity'), 
-      value: weatherData ? `${weatherData.humidity}%` : '85%', 
-      status: (weatherData?.humidity ?? 85) > 80 ? 'High' : 'Normal', 
-      color: (weatherData?.humidity ?? 85) > 80 ? 'bg-red-500/20 text-red-500' : 'bg-emerald-500/20 text-emerald-500', 
-      icon: Wind 
-    },
-    { 
-      label: t('temperature'), 
-      value: weatherData ? `${Math.round(weatherData.temperature)}°C` : '32°C', 
-      status: (weatherData?.temperature ?? 32) > 35 ? 'Hot' : 'Warm', 
-      color: (weatherData?.temperature ?? 32) > 35 ? 'bg-orange-500/20 text-orange-500' : 'bg-amber-500/20 text-amber-500', 
-      icon: Thermometer 
-    },
+    { label: t('humidity'), value: '85%', status: 'High', color: 'bg-red-500/20 text-red-500', icon: Wind },
+    { label: t('temperature'), value: '32°C', status: 'Warm', color: 'bg-amber-500/20 text-amber-500', icon: Thermometer },
     { label: t('soil_ph'), value: '6.8', status: 'Good', color: 'bg-emerald-500/20 text-emerald-500', icon: TestTube },
     { label: t('moisture'), value: '42%', status: 'Good', color: 'bg-emerald-500/20 text-emerald-500', icon: Droplets },
   ];
@@ -65,6 +59,12 @@ export const CropStatus: FC<CropStatusProps> = ({ isSunlightMode, weatherData })
       }`}>
         <span className={`w-1.5 h-6 rounded-full ${isSunlightMode ? 'bg-neon-agri' : 'bg-blue-500'}`}></span>
         {t('live_field_status')}
+        {/* Demo Data badge — shown when no real scans exist yet */}
+        {isSimulationMode && (
+          <span className="ml-auto text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+            Demo Data
+          </span>
+        )}
       </h2>
 
       <div className="grid grid-cols-4 gap-2">
@@ -91,6 +91,35 @@ export const CropStatus: FC<CropStatusProps> = ({ isSunlightMode, weatherData })
           </div>
         ))}
       </div>
+
+      {/* Live Scan History — shown only when real telemetry data exists */}
+      {telemetryHistory.length > 0 && (
+        <div className="mt-6 pt-4 border-t border-zinc-800">
+          <p className={`text-[10px] font-black uppercase tracking-widest mb-3 flex items-center gap-2 ${
+            isSunlightMode ? 'text-white/60' : 'text-zinc-500'
+          }`}>
+            <FlaskConical className="w-3 h-3" />
+            Recent Scans
+          </p>
+          <div className="space-y-2">
+            {telemetryHistory.map((entry, idx) => (
+              <div key={idx} className={`flex items-center justify-between px-3 py-2 rounded-xl ${
+                isSunlightMode ? 'bg-white/5 border border-white/10' : 'bg-zinc-800/60'
+              }`}>
+                <div>
+                  <p className={`text-xs font-black ${isSunlightMode ? 'text-neon-agri' : 'text-white'}`}>{entry.result}</p>
+                  <p className={`text-[10px] font-bold uppercase ${isSunlightMode ? 'text-white/40' : 'text-zinc-500'}`}>
+                    {entry.crop} • {entry.date}
+                  </p>
+                </div>
+                <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                  isSunlightMode ? 'bg-white text-black' : 'bg-emerald-500/20 text-emerald-400'
+                }`}>{entry.type}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

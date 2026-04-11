@@ -8,8 +8,8 @@ import uuid
 import aiofiles
 import asyncio
 from typing import Optional, List, Dict, Any, Tuple
-from fastapi import FastAPI, Request, status, UploadFile, File, Form, Depends, HTTPException
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi import FastAPI, Request, status, UploadFile, File, Form, Depends
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -33,19 +33,16 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize FastAPI with lifespan
-from contextlib import asynccontextmanager
+# Initialize FastAPI
+app = FastAPI(title="Kisaan AI Proactive Loop", description="Hackathon MVP Phase 3 - Autonomous Agri-Assistant")
 
-@asynccontextmanager
-async def lifespan(app):
-    # Startup
-    os.makedirs("uploads/audio", exist_ok=True)
-    await init_db()
-    asyncio.create_task(proactive_weather_monitor())
-    yield
-    # Shutdown (cleanup if needed)
+# ---------------------------------------------------------------------------
+# SIMULATION_MODE: Set to False once real Firebase + Agmarknet credentials
+# are configured. When True, FCM sends mock push notifications and Mandi
+# data returns static demo prices. No external billing is incurred.
+# ---------------------------------------------------------------------------
+SIMULATION_MODE: bool = True
 
-app = FastAPI(title="Kisaan AI Proactive Loop", description="Hackathon MVP Phase 3 - Autonomous Agri-Assistant", lifespan=lifespan)
 
 # Infinite Loop Background Task
 async def proactive_weather_monitor():
@@ -66,6 +63,7 @@ async def proactive_weather_monitor():
                     lat, lon = (farmer.latitude or 28.6139), (farmer.longitude or 77.2090)
                     try:
                         _, weather_alerts = await fetch_weather_and_alerts(lat, lon)
+                        # Instead of just alerting, let's proactively save state if danger exists
                         if weather_alerts.has_alert:
                             title = "⚠️ URGENT WEATHER ALERT"
                             message = weather_alerts.reasons[0]
@@ -76,11 +74,32 @@ async def proactive_weather_monitor():
                         logger.error(f"Failed worker task for farmer {farmer.id}: {loop_e}")
         except Exception as e:
             logger.error(f"Proactive monitor loop fatal crash: {e}")
+            
+        await asyncio.sleep(60) # Sleep for 60 seconds (Hackathon config)
 
-        await asyncio.sleep(300)  # 5 min interval (was 60s, too aggressive for API quota)
+@app.on_event("startup")
+async def startup_event():
+    # Ensure all required directories exist (also created at module level below,
+    # but this guard covers any edge-cases hit during async startup)
+    os.makedirs("uploads/audio", exist_ok=True)
+    os.makedirs("chroma_db", exist_ok=True)
+    await init_db()
+    # Spawn the infinite loop task asynchronously
+    asyncio.create_task(proactive_weather_monitor())
+
+# ---------------------------------------------------------------------------
+# Bootstrap critical runtime directories BEFORE app.mount() is called.
+# app.mount() is evaluated at module-import time, so the directory must
+# already exist — it cannot rely on the async startup_event hook.
+# ---------------------------------------------------------------------------
+os.makedirs("uploads", exist_ok=True)          # Static file serving root
+os.makedirs("uploads/audio", exist_ok=True)    # gTTS audio output
+os.makedirs("chroma_db", exist_ok=True)        # ChromaDB vector persistence
 
 # Mount static files so URLs can be accessed by the browser
 app.mount("/static", StaticFiles(directory="uploads"), name="static")
+# Dedicated audio route — speech_url points here (http://localhost:8001/audio/<file>.mp3)
+app.mount("/audio", StaticFiles(directory="uploads/audio"), name="audio")
 
 # Configure CORS
 app.add_middleware(
@@ -113,12 +132,9 @@ class ChatRequest(BaseModel):
     message: str
 
 class ChatResponse(BaseModel):
-    agent_state: str
-    follow_up_question: Optional[str] = None
-    rag_advice: str
-    audio_summary: str
-    language_code: Optional[str] = None
+    response: str
     speech_url: Optional[str] = None
+    follow_up_question: Optional[str] = None
 
 # Global Exception Handler
 @app.exception_handler(Exception)
@@ -134,25 +150,12 @@ def _generate_speech_sync(text: str, filename: str, lang: str = 'hi'):
 async def generate_speech(text: str, file_id: str, lang: str = 'hi') -> str:
     local_path = f"uploads/audio/{file_id}.mp3"
     await asyncio.to_thread(_generate_speech_sync, text, local_path, lang)
-    return f"http://localhost:8000/static/audio/{file_id}.mp3"
+    # Use port 8001 and the /audio static route (not /static/audio)
+    return f"http://localhost:8001/audio/{file_id}.mp3"
 
-# Mandi Market Price Data (crop-specific mock — replace with real API later)
-MANDI_PRICE_DATA = {
-    "tomato":  {"min_price": "₹12/kg", "max_price": "₹28/kg", "trend": "rising",  "mandi": "Azadpur, Delhi"},
-    "wheat":   {"min_price": "₹22/kg", "max_price": "₹26/kg", "trend": "stable",  "mandi": "Karnal, Haryana"},
-    "rice":    {"min_price": "₹30/kg", "max_price": "₹42/kg", "trend": "stable",  "mandi": "Amritsar, Punjab"},
-    "potato":  {"min_price": "₹8/kg",  "max_price": "₹15/kg", "trend": "falling", "mandi": "Agra, UP"},
-    "onion":   {"min_price": "₹18/kg", "max_price": "₹35/kg", "trend": "rising",  "mandi": "Lasalgaon, Maharashtra"},
-    "cotton":  {"min_price": "₹55/kg", "max_price": "₹72/kg", "trend": "stable",  "mandi": "Rajkot, Gujarat"},
-    "maize":   {"min_price": "₹16/kg", "max_price": "₹22/kg", "trend": "falling", "mandi": "Davangere, Karnataka"},
-    "mustard": {"min_price": "₹48/kg", "max_price": "₹58/kg", "trend": "rising",  "mandi": "Alwar, Rajasthan"},
-    "sugarcane": {"min_price": "₹3/kg", "max_price": "₹4/kg",  "trend": "stable", "mandi": "Muzaffarnagar, UP"},
-}
-DEFAULT_MANDI = {"min_price": "₹15/kg", "max_price": "₹25/kg", "trend": "stable", "mandi": "Local Market"}
-
+# Mock Mandi Market API Utility
 async def fetch_mandi_prices(crop_name: str) -> Dict[str, Any]:
-    data = MANDI_PRICE_DATA.get(crop_name.lower(), DEFAULT_MANDI)
-    return {"crop": crop_name, "market_data": data}
+    return {"crop": crop_name, "market_data": {"min_price": "₹15/kg", "max_price": "₹25/kg", "trend": "stable"}}
 
 class WeatherAlertState:
     def __init__(self, has_alert, reasons):
@@ -183,69 +186,9 @@ async def fetch_weather_and_alerts(lat: float, lon: float) -> Tuple[Dict[str, An
             
         return current_data, WeatherAlertState(has_alert, reasons)
 
-class AgriBrain:
-    @staticmethod
-    async def analyze(image_b64: str, transcript: Optional[str], previous_context: Optional[str] = None) -> Dict[str, Any]:
-        image_data = base64.b64decode(image_b64.split(',', 1)[1] if ',' in image_b64 else image_b64)
-        img = Image.open(io.BytesIO(image_data)).convert('RGB')
-
-        # Fallback to Gemini (Native CV model integration reserved for teammate)
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        prompt = "You are an Expert Agronomist. Return ONLY JSON matching schema: {diagnosis:str, confidence:float, immediate_action:list, organic_alternative:str, regional_language_summary:str, market_valuation:str, government_subsidy_hint:str}\n"
-        if previous_context: prompt += f"Context: {previous_context}\n"
-        if transcript: prompt += f"Transcript: {transcript}\n"
-        
-        response = await model.generate_content_async([prompt, img])
-        text = response.text.strip()
-        if text.startswith("```json"): text = text[7:-3].strip()
-        return json.loads(text)
-
 # API Endpoints
-@app.get("/", include_in_schema=False)
-async def root():
-    """Redirect root to API docs"""
-    return RedirectResponse(url="/docs")
-
 @app.get("/health")
 async def health_check(): return {"status": "healthy"}
-
-# Farmer Registration
-class FarmerCreate(BaseModel):
-    name: str
-    location: str
-    primary_crop: str
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    fcm_token: Optional[str] = None
-
-@app.post("/farmers")
-async def register_farmer(farmer: FarmerCreate, db: AsyncSession = Depends(get_db)):
-    """ Register a new farmer profile """
-    new_farmer = FarmerProfile(
-        name=farmer.name,
-        location=farmer.location,
-        primary_crop=farmer.primary_crop,
-        latitude=farmer.latitude,
-        longitude=farmer.longitude,
-        fcm_token=farmer.fcm_token
-    )
-    db.add(new_farmer)
-    await db.commit()
-    await db.refresh(new_farmer)
-    return {"id": new_farmer.id, "name": new_farmer.name, "message": "Farmer registered successfully"}
-
-@app.get("/farmers/{farmer_id}")
-async def get_farmer(farmer_id: int, db: AsyncSession = Depends(get_db)):
-    """ Get farmer profile by ID """
-    result = await db.execute(select(FarmerProfile).where(FarmerProfile.id == farmer_id))
-    farmer = result.scalars().first()
-    if not farmer:
-        raise HTTPException(status_code=404, detail="Farmer not found")
-    return {
-        "id": farmer.id, "name": farmer.name, "location": farmer.location,
-        "primary_crop": farmer.primary_crop, "latitude": farmer.latitude,
-        "longitude": farmer.longitude
-    }
 
 @app.get("/weather-alerts")
 async def get_weather_alerts(lat: float, lon: float):
@@ -255,57 +198,13 @@ async def get_weather_alerts(lat: float, lon: float):
             "title": "Weather Alert" if alert_state.has_alert else "Weather Normal",
             "message": alert_state.reasons[0] if alert_state.has_alert and alert_state.reasons else "Conditions are favorable.",
             "urgency": "High" if alert_state.has_alert else "Low",
-            "humidity": weather_info.get("main", {}).get("humidity", 0),
-            "temperature": weather_info.get("main", {}).get("temp", 0)
+            "humidity": weather_info.get("current", {}).get("main", {}).get("humidity", 0),
+            "temperature": weather_info.get("current", {}).get("main", {}).get("temp", 0)
         }
     except Exception as e:
         logger.error(f"Weather fetch failed: {e}")
         return {"title": "Error", "message": "Weather unavailable", "urgency": "N/A", "humidity": 0, "temperature": 0}
 
-@app.post("/analyze/upload", response_model=UnifiedResponse)
-async def analyze_crop_file_upload(
-    image: UploadFile = File(...),
-    lat: float = Form(...),
-    lon: float = Form(...),
-    transcript: Optional[str] = Form(None),
-    farmer_id: Optional[int] = Form(None),
-    db: AsyncSession = Depends(get_db)
-):
-    """ Legacy image upload flow """
-    farmer, previous_context, market_prices = None, None, None
-    if farmer_id:
-        result = await db.execute(select(FarmerProfile).where(FarmerProfile.id == farmer_id))
-        farmer = result.scalars().first()
-        if farmer:
-            market_prices = await fetch_mandi_prices(farmer.primary_crop)
-            hist = await db.execute(select(DiagnosisHistory).where(DiagnosisHistory.farmer_id == farmer_id).order_by(DiagnosisHistory.timestamp.desc()))
-            latest = hist.scalars().first()
-            if latest: previous_context = latest.ai_diagnosis
-
-    weather_info, alert_state = await fetch_weather_and_alerts(lat, lon)
-    
-    file_id = str(uuid.uuid4())
-    local_filename = f"uploads/{file_id}.jpg"
-    image_bytes = await image.read()
-    async with aiofiles.open(local_filename, 'wb') as f: await f.write(image_bytes)
-    
-    diagnosis_data = await AgriBrain.analyze(base64.b64encode(image_bytes).decode('utf-8'), transcript, previous_context)
-    
-    if farmer_id:
-        db.add(DiagnosisHistory(farmer_id=farmer_id, crop_image_url=local_filename, ai_diagnosis=diagnosis_data.get('diagnosis')))
-        await db.commit()
-
-    speech_url = None
-    if hindi_text := diagnosis_data.get("regional_language_summary"):
-        speech_url = await generate_speech(hindi_text, file_id)
-
-    return UnifiedResponse(data=AnalyzeResponseData(
-        weather_info=weather_info,
-        weather_alerts={"has_alert": alert_state.has_alert, "reasons": alert_state.reasons},
-        market_prices=market_prices,
-        diagnosis=diagnosis_data,
-        speech_url=speech_url
-    ))
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat_advisory(req: ChatRequest, db: AsyncSession = Depends(get_db)):
@@ -422,22 +321,18 @@ User Query: {req.message}
     db.add(ChatMessage(session_id=session.id, role="model", content=json.dumps(parsed_resp)))
     await db.commit()
 
-    # Synthesize Audio Response strictly from the regional audio summary using the detected lang code
+        # Synthesize Audio Response strictly from the regional audio summary using the detected lang code
     speech_url = None
     try:
-        # Fallback to 'hi' if language_code fails
         if audio_summary:
             speech_url = await generate_speech(audio_summary, str(uuid.uuid4()), lang=language_code)
     except Exception as e:
         logger.error(f"Chat TTS error: {e}")
         
     return ChatResponse(
-        agent_state=agent_state,
-        follow_up_question=follow_up_question,
-        rag_advice=rag_advice,
-        audio_summary=audio_summary,
-        language_code=language_code,
-        speech_url=speech_url
+        response=rag_advice,
+        speech_url=speech_url,
+        follow_up_question=follow_up_question
     )
 
 @app.get("/notifications/{farmer_id}")
@@ -487,34 +382,87 @@ async def process_voice_to_text(
         logger.error(f"Voice processing error for Farmer {farmer_id}: {e}", exc_info=True)
         return JSONResponse(status_code=500, content={"error": "Failed to process audio query. Please try typing or check your microphone settings."})
 
-@app.get("/mandi/{crop_name}")
-async def get_mandi_prices_endpoint(crop_name: str):
-    """ Fetch market prices for a specific crop """
-    try:
-        data = await fetch_mandi_prices(crop_name)
-        return data
-    except Exception as e:
-        logger.error(f"Mandi price fetch failed: {e}")
-        return JSONResponse(status_code=500, content={"error": "Failed to fetch market data"})
+from fastapi import HTTPException
+from orchestrator.agent import run_analysis_workflow
 
-@app.get("/history/{history_id}")
-async def get_history_detail(history_id: int, db: AsyncSession = Depends(get_db)):
-    """ Fetch a single diagnosis history record by ID """
-    result = await db.execute(select(DiagnosisHistory).where(DiagnosisHistory.id == history_id))
-    history = result.scalars().first()
-    if not history:
-        raise HTTPException(status_code=404, detail="History record not found")
-    return history
+@app.post("/analyze")
+async def analyze_crop(
+    image: UploadFile = File(...),
+    lat: float = Form(...),
+    lon: float = Form(...),
+    transcript: Optional[str] = Form(None),
+    preferred_language: str = Form("en"),
+    farmer_id: Optional[int] = Form(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Given an image file, GPS coordinates, and a preferred language, returns a localized, 
+    hyper-specific agricultural advice payload matching the Orchestrator schema.
+    """
+    image_bytes = await image.read()
+    
+    result = await run_analysis_workflow(
+        image_bytes=image_bytes,
+        user_text=transcript or "",
+        lat=lat,
+        lon=lon,
+        preferred_language=preferred_language
+    )
+    
+    if "agent_state" in result and result["agent_state"].get("phase") == "ERROR":
+        raise HTTPException(status_code=400, detail=result["payload"]["diagnosis"])
+    
+    # Background persistence of scan into SQLite
+    if farmer_id:
+        try:
+            db.add(DiagnosisHistory(
+                farmer_id=farmer_id,
+                crop_image_url="uploaded_scan", 
+                ai_diagnosis=result.get("payload", {}).get("diagnosis", "Unknown")
+            ))
+            await db.commit()
+        except Exception as e:
+            logger.error(f"Failed to record diagnostic history: {e}")
+            
+    return result
 
-@app.get("/history/farmer/{farmer_id}")
-async def get_farmer_history(farmer_id: int, db: AsyncSession = Depends(get_db)):
-    """ Fetch all diagnosis records for a specific farmer """
-    result = await db.execute(
+@app.get("/telemetry")
+async def fetch_telemetry(farmer_id: int = 1, db: AsyncSession = Depends(get_db)):
+    """ Pull latest history and mandi data, handling mocked fallbacks if DB is empty. """
+    hist_result = await db.execute(
         select(DiagnosisHistory)
         .where(DiagnosisHistory.farmer_id == farmer_id)
         .order_by(DiagnosisHistory.timestamp.desc())
+        .limit(5)
     )
-    histories = result.scalars().all()
-    return histories
-
-
+    history = hist_result.scalars().all()
+    
+    MOCK_MANDI = [
+        {"crop": "Tomato", "price": 2400, "unit": "Quintal", "trend": "up", "market": "Azadpur"},
+        {"crop": "Wheat", "price": 2100, "unit": "Quintal", "trend": "stable", "market": "Lucknow"},
+        {"crop": "Potato", "price": 1200, "unit": "Quintal", "trend": "down", "market": "Indore"}
+    ]
+    MOCK_HISTORY = [
+        {"date": "10 Apr", "type": "Pest Scan", "result": "Early Blight", "crop": "Tomato"},
+        {"date": "08 Apr", "type": "Voice Help", "result": "Fertilizer Advice", "crop": "Wheat"},
+        {"date": "05 Apr", "type": "Pest Scan", "result": "Healthy", "crop": "Rice"},
+    ]
+    
+    # Translate historical diagnosis into UI schema format safely natively
+    ui_history = []
+    if history:
+        for h in history:
+            date_str = h.timestamp.strftime("%d %b")
+            ui_history.append({
+                "date": date_str,
+                "type": "Pest Scan",
+                "result": h.ai_diagnosis[:30] + "..." if len(h.ai_diagnosis) > 30 else h.ai_diagnosis,
+                "crop": "Automated Scan"
+            })
+    else:
+        ui_history = MOCK_HISTORY
+        
+    return {
+        "mandi": MOCK_MANDI,
+        "history": ui_history
+    }
