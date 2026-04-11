@@ -236,11 +236,9 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col items-center">
-      {/* Auth gate */}
-      {(authLoading || !user) && (
+      {(authLoading || !user) ? (
         <AuthScreen isSunlightMode={isSunlightMode} />
-      )}
-      {!authLoading && user && (
+      ) : (
       <div className="w-full max-w-md bg-zinc-950 min-h-screen flex flex-col relative shadow-2xl overflow-x-hidden pb-12">
         <Header
           isSunlightMode={isSunlightMode}
@@ -339,6 +337,7 @@ function AppContent() {
           isSunlightMode={isSunlightMode}
         />
       </div>
+      )}
     </div>
   );
 }
