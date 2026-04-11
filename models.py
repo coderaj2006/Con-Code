@@ -31,6 +31,14 @@ class DiagnosisHistory(Base):
     ai_diagnosis: Mapped[str] = mapped_column(String(2000), nullable=True)
     weather_at_time: Mapped[str] = mapped_column(String(500), nullable=True)
 
+class Notification(Base):
+    __tablename__ = "notifications"
+    
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    farmer_id: Mapped[int] = mapped_column(ForeignKey("farmers.id"))
+    message: Mapped[str] = mapped_column(String(500), nullable=False)
+    timestamp: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime.utcnow)
+
 # Dependency injection generator for FastAPI
 async def get_db():
     async with AsyncSessionLocal() as session:

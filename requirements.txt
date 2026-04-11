@@ -9,3 +9,4 @@ python-multipart
 sqlalchemy
 aiosqlite
 aiofiles
+gTTS
