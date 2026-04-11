@@ -12,7 +12,7 @@ import { useRef } from 'react';
 import { weatherService } from './services/weatherService';
 import { speechService } from './services/speech';
 import { SkeletonCard } from './components/SkeletonCard';
-import { AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ToastProvider } from './context/ToastContext';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { TranslationProvider, useTranslation } from './context/TranslationContext';
