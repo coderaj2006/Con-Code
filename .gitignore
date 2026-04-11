@@ -21,3 +21,7 @@ __pycache__/
 # MacOS / OS
 .DS_Store
 Thumbs.db
+uploads/
+*.db
+response*.json
+*.jpg

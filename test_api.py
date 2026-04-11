@@ -1,47 +1,55 @@
-import base64
-import json
 import httpx
 import asyncio
+import json
 import os
 
 async def test_kisaan_ai():
-    url = "http://localhost:8000/analyze"
+    url = "http://localhost:8000/analyze/upload"
     
-    # Put any plant image inside your folder to test
     image_path = "test_plant.jpg" 
     
     if not os.path.exists(image_path):
         print(f"⚠️  Please place a sample image named '{image_path}' in this directory first.")
-        print("You can just download any picture of a plant leaf from Google Images and rename it.")
         return
 
-    try:
-        with open(image_path, "rb") as image_file:
-            encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
-    except Exception as e:
-        print(f"Error reading image: {e}")
-        return
-
-    payload = {
-        "image_base64": encoded_string,
-        "lat": 28.6139,  # New Delhi Coordinates for OpenWeatherMap test
-        "lon": 77.2090,
-        "transcript": "My plant leaves are turning yellow with brown spots, what should I do?"
+    # Data to send as regular form fields
+    data_payload = {
+        "lat": "28.6139",  # New Delhi
+        "lon": "77.2090",
+        "transcript": "My crop is completely wilting today and the leaves look burnt.",
+        "farmer_id": "1"  # Our dummy DB user "Ramesh"
     }
 
-    print("Sending request to Kisaan AI backend (this might take a few seconds for Gemini to process)...")
+    print("Sending FIRST request. This will initialize the DB, seed Ramesh, and create the first scan history...")
     
-    # Gemini processing + OpenWeatherMap fetch takes a few seconds, so we set a higher timeout
     async with httpx.AsyncClient(timeout=60.0) as client:
         try:
-            response = await client.post(url, json=payload)
+            with open(image_path, "rb") as f:
+                files = {"image": (image_path, f, "image/jpeg")}
+                response = await client.post(url, data=data_payload, files=files)
+            
             print(f"Status Code: {response.status_code}")
-            print("\nSuccess! The response was too long and contained Hindi characters, so it was saved to 'response.json'.")
-            
-            with open("response.json", "w", encoding="utf-8") as f:
+            with open("response_1.json", "w", encoding="utf-8") as f:
                 json.dump(response.json(), f, indent=2, ensure_ascii=False)
+            print("First response saved to 'response_1.json'!")
             
-            print("-> Open 'response.json' in your editor to see the magic!")
+            # --- SECOND REQUEST TO TEST AI LONGITUDINAL CONTEXT MEMORY ---
+            print("\nWaiting a few seconds... Now sending a SECOND scan for the same farmer...")
+            await asyncio.sleep(2)
+            
+            # Change the transcript slightly to simulate follow up
+            data_payload["transcript"] = "Here is an updated photo. It looks like it spread further up the stem since my last scan."
+            
+            with open(image_path, "rb") as f:
+                files = {"image": (image_path, f, "image/jpeg")}
+                response2 = await client.post(url, data=data_payload, files=files)
+            
+            print(f"Status Code: {response2.status_code}")
+            with open("response_2.json", "w", encoding="utf-8") as f:
+                json.dump(response2.json(), f, indent=2, ensure_ascii=False)
+            print("Second response saved to 'response_2.json'!")
+            print("-> Open both response_1.json and response_2.json to see how the AI gained memory of the previous scan!")
+
         except Exception as e:
             print(f"Connection Error: {e}")
             print("Did you make sure to start the server using 'uvicorn main:app --reload' in another terminal?")
