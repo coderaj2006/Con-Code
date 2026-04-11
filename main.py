@@ -23,6 +23,7 @@ from gtts import gTTS
 
 from models import init_db, get_db, FarmerProfile, DiagnosisHistory, Notification, ChatSession, ChatMessage
 from fcm_service import send_fcm_notification
+from vector_service import AgriVectorDB
 from ml.weather_risk_model import risk_engine
 
 # Load environment variables
@@ -109,7 +110,11 @@ class ChatRequest(BaseModel):
     message: str
 
 class ChatResponse(BaseModel):
-    response: str
+    agent_state: str
+    follow_up_question: Optional[str] = None
+    rag_advice: str
+    audio_summary: str
+    language_code: Optional[str] = None
     speech_url: Optional[str] = None
 
 # Global Exception Handler
@@ -245,9 +250,35 @@ async def analyze_crop_file_upload(
 @app.post("/chat", response_model=ChatResponse)
 async def chat_advisory(req: ChatRequest, db: AsyncSession = Depends(get_db)):
     """ Standalone Multi-turn Advisory Chat """
+    # Fetch Farmer Profile
+    result = await db.execute(select(FarmerProfile).where(FarmerProfile.id == req.farmer_id))
+    farmer = result.scalars().first()
+    
+    farmer_context = "Unknown"
+    market_prices = "Unknown"
+    lat, lon = 28.6139, 77.2090
+    if farmer:
+        farmer_context = f"Location: Lat {farmer.latitude}, Long {farmer.longitude}. Primary Crop: {farmer.primary_crop}"
+        lat = farmer.latitude or lat
+        lon = farmer.longitude or lon
+        market_prices = await fetch_mandi_prices(farmer.primary_crop)
+
+    # Fetch Weather
+    weather_info, alert_state = await fetch_weather_and_alerts(lat, lon)
+    weather_context = f"Temp: {weather_info.get('main', {}).get('temp', 'N/A')}°C, Humidity: {weather_info.get('main', {}).get('humidity', 'N/A')}%. Alerts: {', '.join(alert_state.reasons) if alert_state.has_alert else 'None'}."
+
+    # Fetch Longitudinal History (last 7 days scans)
+    hist_result = await db.execute(select(DiagnosisHistory).where(DiagnosisHistory.farmer_id == req.farmer_id).order_by(DiagnosisHistory.timestamp.desc()).limit(7))
+    histories = hist_result.scalars().all()
+    history_context = " | ".join([h.ai_diagnosis for h in histories if h.ai_diagnosis]) or "No previous scans."
+
+    # Fetch Vector Knowledge Base Results
+    rag_hits = await AgriVectorDB.query_agri_knowledge_base(req.message)
+    rag_context = "\n".join(rag_hits) if rag_hits else "No specific RAG data found."
+
     # Fetch or Create Chat Session
-    result = await db.execute(select(ChatSession).where(ChatSession.farmer_id == req.farmer_id).order_by(ChatSession.started_at.desc()))
-    session = result.scalars().first()
+    session_result = await db.execute(select(ChatSession).where(ChatSession.farmer_id == req.farmer_id).order_by(ChatSession.started_at.desc()))
+    session = session_result.scalars().first()
     if not session:
         session = ChatSession(id=str(uuid.uuid4()), farmer_id=req.farmer_id)
         db.add(session)
@@ -266,27 +297,88 @@ async def chat_advisory(req: ChatRequest, db: AsyncSession = Depends(get_db)):
     history_arr = [{"role": msg.role, "parts": [msg.content]} for msg in history_records]
     chat = model.start_chat(history=history_arr)
     
-    prompt = f"System: You are an Expert Indian Agronomist Advisory Bot. Use simple, non-technical Hindi language. Focus on soil prep, irrigation, and pesticide advice.\nUser: {req.message}"
+    prompt = f"""### ROLE
+You are the Lead Architect for Kisaan AI's RAG Pipeline and act as a sympathetic "Dr. Kisaan". You are building a stateful, multi-turn diagnostic agent.
+
+### CONTEXTUAL AWARENESS
+- Farmer Profile: {farmer_context}
+- Current Weather: {weather_context}
+- Longitudinal History: {history_context}
+- Market Data: {market_prices}
+- Knowledge Base Results: {rag_context}
+
+### OPERATIONAL GUIDELINES (GAP ANALYSIS)
+1. DATA RETRIEVAL & INJECTION: You have been provided the Knowledge Base Results and the Farmer's context above. You must use this RAG context to supply accurate 'rag_advice' focused on organic solutions, subsidies, and Kharif/Rabi seasons.
+2. GAP ANALYSIS: Evaluate if the user's problem is missing "Critical Variables" (e.g., if they mention a pest but don't state their irrigation status, or mention crop failure but don't specify the crop type).
+3. ITERATIVE QUESTIONING: If there is missing critical data, you MUST set "agent_state" to "DISCOVERY", and prompt the user in 'follow_up_question' before giving a diagnosis. If data is sufficient, state is "DIAGNOSIS" or "ACTION".
+4. OUTPUT STRUCTURE: Return exactly the JSON schema below.
+
+### RESPONSE STRUCTURE (STRICT JSON)
+Your output must be a valid JSON object matching exactly this schema:
+{{
+  "agent_state": "DISCOVERY|DIAGNOSIS|ACTION",
+  "follow_up_question": "A string asking for the missing critical variable, or null if state is ACTION/DIAGNOSIS.",
+  "rag_advice": "Detailed string containing your synthesis of the Context and User Query. Must use the Knowledge Base Results.",
+  "audio_summary": "A short 2-sentence summary in the user's native regional language.",
+  "language_code": "The exact ISO 639-1 2-letter code for the audio_summary (e.g., 'hi', 'mr', 'ta', 'te', 'gu'). Default 'hi'."
+}}
+
+User Query: {req.message}
+"""
     
     try:
         resp = await chat.send_message_async(prompt)
-        ai_text = resp.text
+        text = resp.text.strip()
+        if text.startswith("```json"):
+            text = text[7:]
+        if text.startswith("```"):
+            text = text[3:]
+        if text.endswith("```"):
+            text = text[:-3]
+        text = text.strip()
+        parsed_resp = json.loads(text)
+        
+        agent_state = parsed_resp.get("agent_state", "ACTION")
+        follow_up_question = parsed_resp.get("follow_up_question", None)
+        rag_advice = parsed_resp.get("rag_advice", "I am sorry, I couldn't process this request.")
+        audio_summary = parsed_resp.get("audio_summary", rag_advice)
+        language_code = parsed_resp.get("language_code", "hi")
     except Exception as e:
         logger.error(f"Chat error: {e}")
-        ai_text = "माफ़ करना, मैं अभी आपकी सहायता नहीं कर पा रहा हूँ।"
+        agent_state = "ACTION"
+        follow_up_question = None
+        rag_advice = "माफ़ करना, मैं अभी आपकी सहायता नहीं कर पा रहा हूँ।"
+        audio_summary = rag_advice
+        language_code = "hi"
+        parsed_resp = {
+            "agent_state": agent_state, 
+            "follow_up_question": follow_up_question,
+            "rag_advice": rag_advice,
+            "audio_summary": audio_summary, 
+            "language_code": language_code
+        }
 
-    # Save outgoing AI message
-    db.add(ChatMessage(session_id=session.id, role="model", content=ai_text))
+    # Save outgoing AI message (Store JSON string to preserve context for next turns)
+    db.add(ChatMessage(session_id=session.id, role="model", content=json.dumps(parsed_resp)))
     await db.commit()
 
-    # Synthesize Audio Response
+    # Synthesize Audio Response strictly from the regional audio summary using the detected lang code
     speech_url = None
     try:
-        speech_url = await generate_speech(ai_text, str(uuid.uuid4()))
+        # Fallback to 'hi' if language_code fails
+        if audio_summary:
+            speech_url = await generate_speech(audio_summary, str(uuid.uuid4()), lang=language_code)
     except Exception as e:
         logger.error(f"Chat TTS error: {e}")
         
-    return ChatResponse(response=ai_text, speech_url=speech_url)
+    return ChatResponse(
+        agent_state=agent_state,
+        follow_up_question=follow_up_question,
+        rag_advice=rag_advice,
+        audio_summary=audio_summary,
+        language_code=language_code,
+        speech_url=speech_url
+    )
 
 @app.get("/notifications/{farmer_id}")
 async def get_unread_notifications(farmer_id: int, db: AsyncSession = Depends(get_db)):
@@ -320,7 +412,7 @@ async def process_voice_to_text(
         
         # Passing audio as a list of parts: [prompt, Part(mime_type, data)]
         response = await model.generate_content_async([
-            "You are a helpful agricultural assistant. Transcribe the following audio query into English text. If it is in Hindi or a regional Indian dialect, translate it accurately to English. ONLY output the transcribed text, no other conversation.",
+            "You are an expert transcriber. Transcribe the following agricultural audio query EXACTLY in its original language using the native geographic script (e.g., Devanagari for Hindi, Tamil script for Tamil, Kannada, Marathi, Gujarati, etc.). Do NOT translate the query to English. ONLY output the raw transcribed text.",
             {
                 "mime_type": audio.content_type or "audio/mpeg",
                 "data": audio_bytes
