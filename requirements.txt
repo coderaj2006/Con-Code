@@ -13,10 +13,10 @@ sqlalchemy
 aiosqlite
 aiofiles
 gTTS
-torch
-torchvision
+torch>=2.5.1
+torchvision>=0.20.1
 scikit-learn
-numpy
+numpy>=2.1.1
 langchain==0.3.1
 langchain-google-genai==2.0.0
 chromadb
