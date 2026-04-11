@@ -7,14 +7,13 @@ import { useTranslation } from '../context/TranslationContext';
 interface AlertCardProps {
   weatherData: WeatherAlertResponse | null;
   isSunlightMode?: boolean;
-  forceType?: 'weather' | 'warning';
 }
 
-export const AlertCard: FC<AlertCardProps> = ({ weatherData, isSunlightMode, forceType }) => {
+export const AlertCard: FC<AlertCardProps> = ({ weatherData, isSunlightMode }) => {
   const { t } = useTranslation();
   if (!weatherData) return null;
 
-  const isHighRisk = forceType === 'warning' || (weatherData.urgency === 'High' && forceType !== 'weather');
+  const isHighRisk = weatherData.urgency === 'High';
 
   if (isHighRisk) {
     return (

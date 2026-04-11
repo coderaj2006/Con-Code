@@ -38,7 +38,6 @@ function AppContent() {
     return localStorage.getItem('sunlight-mode') === 'true';
   });
   const [isWeatherDataLoading, setIsWeatherDataLoading] = useState(true);
-  const [showDemoWarning] = useState(true); // Mid-Eval Demo Mode
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const handleImageAnalysis = async (file: File) => {
@@ -183,24 +182,32 @@ function AppContent() {
         <main className="flex-grow scroll-smooth px-4 pt-6 pb-32 space-y-6">
           <section>
             <ErrorBoundary>
-              {isWeatherDataLoading ? (
-                <SkeletonCard type="weather" />
-              ) : (
-                <div className="space-y-6">
-                  <AlertCard 
-                    weatherData={weatherData} 
-                    isSunlightMode={isSunlightMode} 
-                    forceType={showDemoWarning ? "weather" : undefined} 
-                  />
-                  {showDemoWarning && (
+              <AnimatePresence mode="wait">
+                {isWeatherDataLoading ? (
+                  <motion.div
+                    key="skeleton"
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <SkeletonCard type="weather" />
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="weather-content"
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 20 }}
+                    transition={{ duration: 0.4, ease: "easeOut" }}
+                  >
                     <AlertCard 
                       weatherData={weatherData} 
                       isSunlightMode={isSunlightMode} 
-                      forceType="warning" 
                     />
-                  )}
-                </div>
-              )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </ErrorBoundary>
           </section>
 
