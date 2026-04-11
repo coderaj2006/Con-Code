@@ -1,0 +1,45 @@
+# Edge Case Scenarios & Handling Protocols
+
+This document defines the top 3 edge cases for the Kisaan AI application and strictly outlines the responsibilities of both the Frontend client and the AI Reasoning Engine when encountering these states.
+
+---
+
+## Edge Case 1: Low-Light, Blurry, or Obscured Image Uploads
+**Scenario**: The user captures a photo of a diseased leaf at dusk, in heavy shadow, or out of focus. The image quality degrades the vision model's ability to extract features, leading to false positives or ambiguous results.
+
+- **Frontend Handling**:
+  - Implement a lightweight, client-side pre-flight check (via Canvas API or similar) to measure image luminosity and sharpness before dispatching the network request.
+  - If the image falls below the threshold, interrupt the user: *"This photo is quite dark/blurry. For an accurate diagnosis, please retake it in better light or use your flash."*
+  - Provide a "Continue Anyway" override button for urgent scenarios.
+- **AI Handling**:
+  - Once received, if the vision model's maximum class confidence across all diseases is <40%, the agent MUST halt the diagnostic pipeline.
+  - Return a specialized HTTP `422 Unprocessable Entity` with an internal code `ERR_LOW_CONFIDENCE_IMAGE`.
+  - The AI MUST NOT guess. The expression payload should be safely scoped: *"I cannot clearly identify the issue due to the image quality. Please upload a clearer photo. Note: Based on your region's current weather, watch out for [Highest Probability Disease]."*
+
+---
+
+## Edge Case 2: Inaccurate or Unavailable GPS Coordinates (Deep Rural Overlay)
+**Scenario**: The user is deep in a field where cellular towers fail to triangulate, or the user's device restricts location permissions. The system receives a generalized or zeroed coordinate.
+
+- **Frontend Handling**:
+  - If the GPS accuracy radius exceeds 2,500 meters, or location fails entirely, standard fallback UI triggers.
+  - Prompt the user to manually select their Village, Block, or District from an offline-cached administrative list.
+  - Append a flag `"location_accuracy": "low"` or `"location_type": "manual"` to the API payload.
+- **AI Handling**:
+  - The agent detects the `"location_accuracy": "low"` flag.
+  - Instead of querying micro-climate weather pipelines, the agent expands its data retrieval to aggregated district-level averages.
+  - The final recommendation payload MUST include a contextual disclaimer: *"Weather and disease alerts attached to this diagnosis are based on district averages. Micro-climates in your specific field may differ."*
+
+---
+
+## Edge Case 3: Poly-infection (Multiple Concurrent Diseases/Threats)
+**Scenario**: The uploaded image displays symptoms of a fungal infection (e.g., Rice Blast) overlapping with a pest attack (e.g., Leaf Folder), or a simultaneous nutrient deficiency.
+
+- **Frontend Handling**:
+  - The UI must dynamically shift from its default "Single Result Card" layout to a "Multi-Threat List" layout.
+  - Threat cards must be ordered by `severity` and `confidence_score`.
+  - Render an urgent warning UI block if multiple treatments are suggested to ensure safe chemical mixing.
+- **AI Handling**:
+  - The reasoning pipeline must process predictions using independent probabilities (e.g., Sigmoid over Softmax) to avoid suppressing secondary diagnoses.
+  - If multiple threats cross the minimum confidence threshold (>55%), the reasoning engine must explicitly cross-check the recommended chemical treatments. 
+  - If the treatments contradict or are hazardous to mix, the output MUST override the standard actionable recommendation to say: *"Warning: Multiple severe threats detected. Do NOT mix generic treatments. Consult your local agronomist or extension officer immediately."*

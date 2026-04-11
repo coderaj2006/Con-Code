@@ -1,0 +1,41 @@
+# Agentic Reasoning Flow: Disease Prediction & Diagnosis
+
+## Objective
+Define the cognitive logic for the AI reasoning engine to properly diagnose and predict crop threats. This specification strictly details how the agent must route, weight, and evaluate multispectral context—specifically prioritizing real-time environmental factors over historical trends for **Rice Blast Disease**.
+
+## Priority Logic: Weather Data vs. Historical Data
+
+When the AI evaluates the risk or symptoms of **Rice Blast Disease (Magnaporthe oryzae)**, it MUST operate under the agronomic premise that the pathogen fundamentally requires specific environmental triggers to sporulate and infect. 
+
+Therefore, **current and forecasted weather data must supersede historical regional data.**
+
+### 1. Context Weighting Matrix
+- **Weather / Environmental Data (Weight: 70%)**: High relative humidity (>85%), prolonged leaf wetness (dew), and moderate temperatures (17°C - 28°C) are the immediate catalysts. Without these, widespread outbreak is physiologically impossible.
+- **Historical / Regional Data (Weight: 30%)**: Past occurrences, endemicity, and historically susceptible cultivars provide a baseline vulnerability index but DO NOT confirm active risk without the weather catalysts.
+
+### 2. Step-by-Step Reasoning Flow
+
+1. **Initial Image Perception (Vision Model)**
+   - The primary vision model scans the uploaded image (e.g., finding characteristic diamond-shaped lesions).
+   - *Output*: Base Probability Score (e.g., 55% likelihood of Rice Blast).
+
+2. **Environmental Contextualization (The Critical Path)**
+   - The AI agent triggers a sub-routine to fetch 7-day trailing and 3-day forecasted weather using coordinates from the image metadata.
+   - **Condition A (Catalyst Present)**: If Relative Humidity > 85% AND temps are 20-25°C for the past 48 hours.
+      - *Action*: Apply significant positive multiplier (+25-30% to base score). Elevate severity to "High/Critical". 
+   - **Condition B (Suppressor Present)**: If weather is extremely hot (>32°C) or very dry (RH < 60%).
+      - *Action*: Apply negative multiplier (-20% to base score). Prompt the reasoning engine to cross-examine for alternative deficiencies (e.g., Drought stress, Brown Spot).
+
+3. **Historical & Cultivar Validation**
+   - The agent cross-references the location's historical disease registry. 
+   - *Action*: If the region is highly endemic, apply a minor alignment (+5%). 
+
+4. **Synthesis & Expression**
+   - The final confidence score is generated. 
+   - The agent structures the actionable recommendation output, referencing *why* the diagnosis was made: "Due to high humidity over the last 3 days and visual lesions, apply Tricyclazole immediately."
+
+### 3. Fail-Safe / Offline Mechanism
+If the weather API fails or the device is completely offline:
+- The agent drops into **Conservative Predictive Mode**.
+- It shifts reliance to the local device's cached historical data (Weight: 80%).
+- *Constraint*: It MUST explicitly state the limitation to the user in the expression layer: *"Warning: Diagnosis based on limited offline data and seasonal trends. Please verify real field humidity manually."*

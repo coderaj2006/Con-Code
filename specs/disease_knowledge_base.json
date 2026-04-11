@@ -1,0 +1,52 @@
+[
+  {
+    "disease_name": "Rice Blast",
+    "pathogen": "Magnaporthe oryzae",
+    "visual_markers": [
+      "Diamond or eye-shaped lesions",
+      "Gray centers with dark brown margins",
+      "Lesions on collar, nodes, and panicle neck"
+    ],
+    "icar_organic_treatment_2026": "Pseudomonas fluorescens seed treatment (10g/kg) and foliar spray of Trichoderma viride enriched formulations at immediate sign of lesions."
+  },
+  {
+    "disease_name": "Bacterial Leaf Blight",
+    "pathogen": "Xanthomonas oryzae",
+    "visual_markers": [
+      "Water-soaked to yellowish stripes on leaf blades",
+      "Wavy margins with bacterial ooze in early morning",
+      "Drying of leaves from tip downwards"
+    ],
+    "icar_organic_treatment_2026": "Cow dung extract (20%) foliar spray combined with early morning application of botanical biopesticides (neem-based Azadirachtin 1500ppm)."
+  },
+  {
+    "disease_name": "Sheath Blight",
+    "pathogen": "Rhizoctonia solani",
+    "visual_markers": [
+      "Oval or irregular greenish-gray spots on leaf sheaths",
+      "Lesions expanding to have brown margins and pale centers",
+      "Typically starts near the water level"
+    ],
+    "icar_organic_treatment_2026": "Application of Trichoderma harzianum (2.5 kg/ha) mixed with farmyard manure (FYM) broadcast during tillering phase."
+  },
+  {
+    "disease_name": "Brown Spot",
+    "pathogen": "Bipolaris oryzae",
+    "visual_markers": [
+      "Round to oval, dark brown lesions",
+      "Yellow halo surrounding the lesion",
+      "Infected seeds show dark and discolored spots"
+    ],
+    "icar_organic_treatment_2026": "Seed soaking in 1% Agniastra (indigenous botanical mixture) and maintaining proper soil nutrition using Jeevamrutha to prevent macro-nutrient stress."
+  },
+  {
+    "disease_name": "Yellow Stem Borer",
+    "pathogen": "Scirpophaga incertulas",
+    "visual_markers": [
+      "Deadheart (drying of the central whorl) in vegetative stage",
+      "Whiteheads (empty, white panicles) in reproductive stage",
+      "Visible entry holes on the stem"
+    ],
+    "icar_organic_treatment_2026": "Installation of pheromone traps (20 traps/ha) and timed release of Trichogramma japonicum egg parasitoids based on predictive climatic flight alerts."
+  }
+]

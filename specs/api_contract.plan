@@ -1,0 +1,146 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Kisaan AI - API Contract",
+    "version": "1.0.0",
+    "description": "Strictly typed API contract for crop analysis and weather/disease alerts."
+  },
+  "paths": {
+    "/analyze": {
+      "post": {
+        "summary": "Analyze crop image for diseases and pests",
+        "description": "Upload a crop image along with location and timestamp to receive an AI-driven diagnosis.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "image_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "S3 or CDNs URL of the uploaded crop image"
+                  },
+                  "location": {
+                    "type": "object",
+                    "properties": {
+                      "lat": { "type": "number", "format": "double" },
+                      "lon": { "type": "number", "format": "double" }
+                    },
+                    "required": ["lat", "lon"]
+                  },
+                  "crop_type": {
+                    "type": "string",
+                    "enum": ["rice", "wheat", "cotton", "maize"]
+                  },
+                  "timestamp": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": ["image_url", "location", "crop_type"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Analysis Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "analysis_id": { "type": "string", "format": "uuid" },
+                    "disease_detected": { "type": "boolean" },
+                    "diagnoses": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "disease_name": { "type": "string" },
+                          "confidence_score": { "type": "number", "format": "float", "minimum": 0, "maximum": 1 },
+                          "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+                          "actionable_recommendation": { "type": "string" }
+                        },
+                        "required": ["disease_name", "confidence_score", "severity"]
+                      }
+                    },
+                    "weather_influenced": {
+                      "type": "boolean",
+                      "description": "Indicates if recent weather data altered the confidence score"
+                    }
+                  },
+                  "required": ["analysis_id", "disease_detected"]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request - Invalid payload or missing fields"
+          },
+          "422": {
+            "description": "Unprocessable Entity - Image quality too low for confident diagnosis"
+          }
+        }
+      }
+    },
+    "/alerts": {
+      "get": {
+        "summary": "Fetch localized agronomy alerts",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "number", "format": "double" }
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "number", "format": "double" }
+          },
+          {
+            "name": "radius_km",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "default": 5 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of active alerts for the region",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "alerts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "alert_id": { "type": "string", "format": "uuid" },
+                          "type": { "type": "string", "enum": ["weather", "disease", "pest"] },
+                          "title": { "type": "string" },
+                          "description": { "type": "string" },
+                          "severity_level": { "type": "string", "enum": ["info", "warning", "critical"] },
+                          "issued_at": { "type": "string", "format": "date-time" },
+                          "valid_until": { "type": "string", "format": "date-time" }
+                        },
+                        "required": ["alert_id", "type", "title", "severity_level", "issued_at"]
+                      }
+                    }
+                  },
+                  "required": ["alerts"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
