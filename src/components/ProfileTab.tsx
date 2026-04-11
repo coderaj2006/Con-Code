@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { User, Bell, Sun, Globe, ChevronRight, LogOut, Shield, Smartphone } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 import { LanguageBottomSheet } from './LanguageBottomSheet';
+import { useAuth } from '../context/AuthContext';
 
 interface ProfileTabProps {
   isSunlightMode?: boolean;
@@ -11,6 +12,7 @@ interface ProfileTabProps {
 
 export const ProfileTab: FC<ProfileTabProps> = ({ isSunlightMode, setIsSunlightMode }) => {
   const { currentLanguage, availableLanguages } = useTranslation();
+  const { user, logout } = useAuth();
   const [isLangOpen, setIsLangOpen] = useState(false);
   const [notificationsOn, setNotificationsOn] = useState(true);
 
@@ -58,7 +60,7 @@ export const ProfileTab: FC<ProfileTabProps> = ({ isSunlightMode, setIsSunlightM
           <User className={`w-10 h-10 ${isSunlightMode ? 'text-black' : 'text-emerald-900'}`} />
         </div>
         <p className={`font-black text-lg uppercase tracking-widest ${isSunlightMode ? 'text-neon-agri' : 'text-white'}`}>
-          Farmer Profile
+          {user?.name || 'Farmer Profile'}
         </p>
         <p className="text-xs font-bold uppercase text-zinc-500">Kisaan AI Member</p>
       </div>
@@ -100,6 +102,7 @@ export const ProfileTab: FC<ProfileTabProps> = ({ isSunlightMode, setIsSunlightM
 
       <motion.button
         whileTap={{ scale: 0.97 }}
+        onClick={logout}
         className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-sm flex items-center justify-center gap-2 border-2 ${
           isSunlightMode ? 'border-white text-white hover:bg-white/10' : 'border-red-500/30 text-red-400 hover:bg-red-500/10'
         }`}

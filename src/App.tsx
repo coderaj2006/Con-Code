@@ -19,6 +19,8 @@ import { TranslationProvider, useTranslation } from './context/TranslationContex
 import { MandiPrices } from './components/MandiPrices';
 import { FieldsTab } from './components/FieldsTab';
 import { ProfileTab } from './components/ProfileTab';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthScreen } from './components/AuthScreen';
 
 export interface ChatMessage {
   role: 'user' | 'ai';
@@ -32,6 +34,7 @@ export interface ChatMessage {
 
 function AppContent() {
   const { currentLanguage } = useTranslation();
+  const { user, isLoading: authLoading, getAuthHeaders } = useAuth();
   const [diagnosisResult, setDiagnosisResult] = useState<OrchestratorResponse | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [weatherData, setWeatherData] = useState<WeatherAlertResponse | null>(null);
@@ -173,32 +176,23 @@ function AppContent() {
 
   const handleSendMessage = async (text: string) => {
     if (!text.trim()) return;
-
     const userMsg: ChatMessage = {
-      role: 'user',
-      type: 'voice',
-      content: text,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      role: 'user', type: 'voice', content: text,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
     addChatMessage(userMsg);
-
     try {
-      const response = await sendMessage(text, currentLanguage);
+      const response = await sendMessage(text, currentLanguage, getAuthHeaders());
       addChatMessage({
-        role: 'ai',
-        type: 'text',
-        content: response.content,
+        role: 'ai', type: 'text', content: response.content,
         follow_up_question: response.follow_up_question,
-        speech_url: response.speech_url,
-        timestamp: response.timestamp
+        speech_url: response.speech_url, timestamp: response.timestamp,
       });
     } catch (error) {
       console.error('Chat error:', error);
       addChatMessage({
-        role: 'ai',
-        type: 'text',
-        content: 'I had trouble connecting to the backend.',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        role: 'ai', type: 'text', content: 'I had trouble connecting to the backend.',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       });
     }
   };
@@ -243,6 +237,11 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-zinc-950 flex flex-col items-center">
+      {/* Auth gate */}
+      {(authLoading || !user) && (
+        <AuthScreen isSunlightMode={isSunlightMode} />
+      )}
+      {!authLoading && user && (
       <div className="w-full max-w-md bg-zinc-950 min-h-screen flex flex-col relative shadow-2xl overflow-x-hidden pb-12">
         <Header
           isSunlightMode={isSunlightMode}
@@ -343,6 +342,7 @@ function AppContent() {
 
         <ScanningOverlay isVisible={false} />
       </div>
+      )}
     </div>
   );
 }
@@ -350,9 +350,11 @@ function AppContent() {
 function App() {
   return (
     <ToastProvider>
-      <TranslationProvider>
-        <AppContent />
-      </TranslationProvider>
+      <AuthProvider>
+        <TranslationProvider>
+          <AppContent />
+        </TranslationProvider>
+      </AuthProvider>
     </ToastProvider>
   );
 }

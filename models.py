@@ -1,17 +1,24 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import Integer, String, DateTime, ForeignKey, Boolean
+from sqlalchemy import Integer, String, DateTime, ForeignKey, Boolean, Float
 import datetime
 
 DATABASE_URL = "sqlite+aiosqlite:///./kisaan_ai.db"
 
-# Create async engine
 engine = create_async_engine(DATABASE_URL, echo=False)
 AsyncSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
 
-# Base class for SQLAlchemy declarative models
 class Base(AsyncAttrs, DeclarativeBase):
     pass
+
+class User(Base):
+    """Auth table — stores hashed passwords for JWT login."""
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    phone: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    farmer_id: Mapped[int] = mapped_column(ForeignKey("farmers.id"), nullable=True)
 
 class FarmerProfile(Base):
     __tablename__ = "farmers"
