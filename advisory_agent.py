@@ -44,7 +44,7 @@ def _build_faiss_store():
         faiss_dir = os.path.join(base_dir, "faiss_index")
 
         embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/embedding-001",
+            model="models/text-embedding-004",
             google_api_key=config.GEMINI_API_KEY,
         )
 
