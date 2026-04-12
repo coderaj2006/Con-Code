@@ -2,6 +2,13 @@ const API_BASE_URL = (import.meta as any).env.VITE_API_URL || 'http://127.0.0.1:
 
 import { OrchestratorResponse } from '../components/DiagnosisDisplay';
 
+export interface WeatherAlert {
+  severity: 'CRITICAL' | 'WARNING' | 'INFO' | 'NORMAL';
+  title: string;
+  message: string;
+  action: string;
+}
+
 export interface WeatherAlertResponse {
   title: string;
   message: string;
@@ -9,6 +16,10 @@ export interface WeatherAlertResponse {
   humidity: number;
   temperature: number;
   city?: string;
+  wind_speed?: number;
+  uv_index?: string;
+  condition?: string;
+  alerts?: WeatherAlert[];
 }
 
 // ── Vision ────────────────────────────────────────────────────────────────────
@@ -42,6 +53,12 @@ export const analyzeCrop = async (
 export const getWeatherAlerts = async (lat: number, lon: number): Promise<WeatherAlertResponse> => {
   const response = await fetch(`${API_BASE_URL}/weather-alerts?lat=${lat}&lon=${lon}`);
   if (!response.ok) throw new Error('Weather fetch failed');
+  return response.json();
+};
+
+export const getWeatherByCity = async (city: string): Promise<WeatherAlertResponse> => {
+  const response = await fetch(`${API_BASE_URL}/weather-by-city?city=${encodeURIComponent(city)}`);
+  if (!response.ok) throw new Error(`City not found: ${city}`);
   return response.json();
 };
 

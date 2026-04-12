@@ -1,6 +1,7 @@
 import { FC, useState, useEffect } from 'react';
-import { Droplets, Thermometer, TestTube, Wind, FlaskConical } from 'lucide-react';
+import { Droplets, Thermometer, TestTube, Wind, FlaskConical, AlertTriangle, Info, AlertCircle } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
+import { WeatherAlert } from '../services/api';
 
 interface TelemetryEntry {
   date: string;
@@ -13,9 +14,39 @@ interface CropStatusProps {
   isSunlightMode?: boolean;
   telemetryHistory?: TelemetryEntry[];
   isSimulationMode?: boolean;
+  smartAlerts?: WeatherAlert[];
 }
 
-export const CropStatus: FC<CropStatusProps> = ({ isSunlightMode, telemetryHistory = [], isSimulationMode = false }) => {
+const SEVERITY_STYLES: Record<string, { bg: string; text: string; border: string; badge: string; icon: FC<any> }> = {
+  CRITICAL: {
+    bg: 'bg-red-500/10',
+    text: 'text-red-400',
+    border: 'border-red-500/30',
+    badge: 'bg-red-500/20 text-red-400 border-red-500/40',
+    icon: AlertTriangle,
+  },
+  WARNING: {
+    bg: 'bg-amber-500/10',
+    text: 'text-amber-400',
+    border: 'border-amber-500/30',
+    badge: 'bg-amber-500/20 text-amber-400 border-amber-500/40',
+    icon: AlertCircle,
+  },
+  INFO: {
+    bg: 'bg-blue-500/10',
+    text: 'text-blue-400',
+    border: 'border-blue-500/30',
+    badge: 'bg-blue-500/20 text-blue-400 border-blue-500/40',
+    icon: Info,
+  },
+};
+
+export const CropStatus: FC<CropStatusProps> = ({
+  isSunlightMode,
+  telemetryHistory = [],
+  isSimulationMode = false,
+  smartAlerts = [],
+}) => {
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(true);
 
@@ -59,7 +90,6 @@ export const CropStatus: FC<CropStatusProps> = ({ isSunlightMode, telemetryHisto
       }`}>
         <span className={`w-1.5 h-6 rounded-full ${isSunlightMode ? 'bg-neon-agri' : 'bg-blue-500'}`}></span>
         {t('live_field_status')}
-        {/* Demo Data badge — shown when no real scans exist yet */}
         {isSimulationMode && (
           <span className="ml-auto text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
             Demo Data
@@ -67,6 +97,7 @@ export const CropStatus: FC<CropStatusProps> = ({ isSunlightMode, telemetryHisto
         )}
       </h2>
 
+      {/* Vitals Grid */}
       <div className="grid grid-cols-4 gap-2">
         {vitals.map((item, idx) => (
           <div key={idx} className="flex flex-col items-center">
@@ -92,7 +123,43 @@ export const CropStatus: FC<CropStatusProps> = ({ isSunlightMode, telemetryHisto
         ))}
       </div>
 
-      {/* Live Scan History — shown only when real telemetry data exists */}
+      {/* Smart Alerts Section */}
+      {smartAlerts.length > 0 && (
+        <div className="mt-6 pt-4 border-t border-zinc-800 space-y-2">
+          <p className={`text-[10px] font-black uppercase tracking-widest mb-3 flex items-center gap-2 ${
+            isSunlightMode ? 'text-white/60' : 'text-zinc-500'
+          }`}>
+            <AlertTriangle className="w-3 h-3" />
+            Actionable Insights
+          </p>
+          {smartAlerts.map((alert, idx) => {
+            const style = SEVERITY_STYLES[alert.severity] ?? SEVERITY_STYLES['INFO'];
+            const Icon = style.icon;
+            return (
+              <div
+                key={idx}
+                className={`rounded-2xl px-3 py-3 border ${style.bg} ${style.border}`}
+              >
+                <div className="flex items-start gap-2">
+                  <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${style.text}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${style.badge}`}>
+                        {alert.severity}
+                      </span>
+                      <span className={`text-xs font-black truncate ${style.text}`}>{alert.title}</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400 leading-snug mb-1">{alert.message}</p>
+                    <p className={`text-[11px] font-bold ${style.text}`}>→ {alert.action}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Live Scan History */}
       {telemetryHistory.length > 0 && (
         <div className="mt-6 pt-4 border-t border-zinc-800">
           <p className={`text-[10px] font-black uppercase tracking-widest mb-3 flex items-center gap-2 ${

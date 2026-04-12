@@ -6,7 +6,7 @@ import { MyCrops } from './components/MyCrops';
 import { CropStatus } from './components/CropStatus';
 import { ChatOverlay } from './components/ChatOverlay';
 import { BottomNav, NavTab } from './components/BottomNav';
-import { WeatherAlertResponse, sendMessage, sendVoiceMessage } from './services/api';
+import { WeatherAlertResponse, WeatherAlert, sendMessage, sendVoiceMessage } from './services/api';
 import { weatherService } from './services/weatherService';
 import { speechService } from './services/speech';
 import { SkeletonCard } from './components/SkeletonCard';
@@ -20,6 +20,7 @@ import { FieldsTab } from './components/FieldsTab';
 import { ProfileTab } from './components/ProfileTab';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthScreen } from './components/AuthScreen';
+import { LocationProvider, useLocation } from './context/LocationContext';
 
 export interface ChatMessage {
   role: 'user' | 'ai';
@@ -34,9 +35,11 @@ export interface ChatMessage {
 function AppContent() {
   const { currentLanguage } = useTranslation();
   const { user, isLoading: authLoading, getAuthHeaders } = useAuth();
+  const { coords } = useLocation();
   const [diagnosisResult, setDiagnosisResult] = useState<OrchestratorResponse | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [weatherData, setWeatherData] = useState<WeatherAlertResponse | null>(null);
+  const [smartAlerts, setSmartAlerts] = useState<WeatherAlert[]>([]);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isUIActive, setIsUIActive] = useState(false);
@@ -87,41 +90,25 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    // Dynamic location fetch
+    // Re-fetch weather whenever coords change (GPS or manual city)
     setIsWeatherDataLoading(true);
-    
-    const fetchWeather = (lat: number, lon: number) => {
-      weatherService.getWeather(lat, lon)
-        .then(data => setWeatherData(data))
-        .catch(err => {
-          console.error('Weather fetch error', err);
-          // Fallback if API fails
-          setWeatherData({
-            title: "Weather Error",
-            message: "Unable to load real-time weather.",
-            urgency: "N/A",
-            humidity: 0,
-            temperature: 0
-          });
-        })
-        .finally(() => setIsWeatherDataLoading(false));
-    };
-
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          fetchWeather(position.coords.latitude, position.coords.longitude);
-        },
-        () => {
-          console.warn('Geolocation denied. Using default (Delhi).');
-          fetchWeather(28.6139, 77.2090);
-        },
-        { timeout: 5000 }
-      );
-    } else {
-      fetchWeather(28.6139, 77.2090);
-    }
-  }, []);
+    weatherService.getWeather(coords.lat, coords.lon)
+      .then(data => {
+        setWeatherData(data);
+        setSmartAlerts((data as any).alerts ?? []);
+      })
+      .catch(() => {
+        setWeatherData({
+          title: 'Weather Error',
+          message: 'Unable to load real-time weather.',
+          urgency: 'NORMAL',
+          humidity: 0,
+          temperature: 0,
+        });
+        setSmartAlerts([]);
+      })
+      .finally(() => setIsWeatherDataLoading(false));
+  }, [coords]);
 
   const addChatMessage = (msg: ChatMessage) => {
     setChatMessages(prev => [...prev, msg]);
@@ -253,7 +240,14 @@ function AppContent() {
                   {isWeatherDataLoading ? (
                     <SkeletonCard type="weather" />
                   ) : (
-                    <AlertCard weatherData={weatherData} isSunlightMode={isSunlightMode} />
+                    <AlertCard
+                    weatherData={weatherData}
+                    isSunlightMode={isSunlightMode}
+                    onWeatherChange={(data) => {
+                      setWeatherData(data);
+                      setSmartAlerts((data as any).alerts ?? []);
+                    }}
+                  />
                   )}
                 </ErrorBoundary>
               </section>
@@ -286,7 +280,7 @@ function AppContent() {
 
               <section>
                 <ErrorBoundary>
-                  <CropStatus isSunlightMode={isSunlightMode} telemetryHistory={telemetryHistory} isSimulationMode={isSimulationMode} />
+                  <CropStatus isSunlightMode={isSunlightMode} telemetryHistory={telemetryHistory} isSimulationMode={isSimulationMode} smartAlerts={smartAlerts} />
                 </ErrorBoundary>
               </section>
 
@@ -301,7 +295,7 @@ function AppContent() {
           {activeTab === 'reports' && (
             <section>
               <ErrorBoundary>
-                <CropStatus isSunlightMode={isSunlightMode} telemetryHistory={telemetryHistory} isSimulationMode={isSimulationMode} />
+                <CropStatus isSunlightMode={isSunlightMode} telemetryHistory={telemetryHistory} isSimulationMode={isSimulationMode} smartAlerts={smartAlerts} />
               </ErrorBoundary>
             </section>
           )}
@@ -346,9 +340,11 @@ function App() {
   return (
     <ToastProvider>
       <AuthProvider>
-        <TranslationProvider>
-          <AppContent />
-        </TranslationProvider>
+        <LocationProvider>
+          <TranslationProvider>
+            <AppContent />
+          </TranslationProvider>
+        </LocationProvider>
       </AuthProvider>
     </ToastProvider>
   );
