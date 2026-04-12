@@ -62,7 +62,12 @@ app.mount("/audio",  StaticFiles(directory="uploads/audio"), name="audio")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",   # Vite dev server
+        "http://127.0.0.1:5173",
+        "http://localhost:8002",   # Backend self-calls
+        "http://127.0.0.1:8002",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -451,7 +456,7 @@ async def voice_chat_advisory(
         lat, lon = (farmer.latitude or 28.6139, farmer.longitude or 77.2090) if farmer else (28.6139, 77.2090)
 
         audio_bytes = await audio.read()
-        model = genai.GenerativeModel("gemini-1.5-flash-latest")
+        model = genai.GenerativeModel("models/gemini-2.5-flash")
 
         # STT via Gemini multimodal
         stt_resp = await model.generate_content_async([

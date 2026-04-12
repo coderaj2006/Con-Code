@@ -1,39 +1,55 @@
+/* RESKIN ONLY — Logic untouched. UI layer updated per Agri-Tech spec. */
 @import "tailwindcss";
 
 @theme {
-  --color-agri-green: #2D5A27;
-  --color-agri-green-dark: #1e3d1a;
-  --color-agri-green-light: #3d7a35;
-  --color-agri-amber: #FFBF00;
-  --color-agri-amber-dark: #cc9900;
-  --color-agri-amber-light: #ffd633;
-  --color-agri-earth: #8B4513;
-  --color-alert-red: #E11D48;
-  
-  --shadow-agri: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-agri-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --shadow-agri-glow: 0 20px 50px rgba(34, 211, 238, 0.2);
-  
-  --color-neon-agri: #39FF14;
+  /* ── Agri-Tech Zen Organic Palette ── */
+  --color-agri-green:      #3B6D11;
+  --color-agri-green-mid:  #639922;
+  --color-agri-cream:      #EAF3DE;
+  --color-agri-soil:       #C8A97A;
+  --color-agri-soil-deep:  #5A3E28;
+  --color-agri-offwhite:   #F5F0E8;
+  --color-agri-amber:      #D4A020;
+  --color-agri-terra:      #B84A2A;
 
-  --animate-pulse-red: pulse-red 2s infinite;
-  --animate-shimmer: shimmer 2s infinite linear;
+  /* Legacy aliases kept for backward compat */
+  --color-agri-green-dark:  #2a4f0c;
+  --color-agri-green-light: #639922;
+  --color-alert-red:        #B84A2A;
+  --color-neon-agri:        #39FF14;
+
+  --shadow-agri: 0 4px 6px -1px rgba(90,62,40,0.08), 0 2px 4px -1px rgba(90,62,40,0.04);
+  --shadow-agri-lg: 0 10px 15px -3px rgba(90,62,40,0.1), 0 4px 6px -2px rgba(90,62,40,0.05);
+
+  /* ── Keyframes ── */
+  @keyframes shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position:  200% 0; }
+  }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%       { transform: translateX(-4px); }
+    40%       { transform: translateX(4px); }
+    60%       { transform: translateX(-4px); }
+    80%       { transform: translateX(4px); }
+  }
 
   @keyframes pulse-red {
-    0%, 100% { 
-      border-color: rgba(225, 29, 72, 0.4); 
-      box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.4); 
-    }
-    50% { 
-      border-color: rgba(225, 29, 72, 1); 
-      box-shadow: 0 0 0 10px rgba(225, 29, 72, 0); 
-    }
+    0%, 100% { border-color: rgba(184,74,42,0.4); box-shadow: 0 0 0 0 rgba(184,74,42,0.4); }
+    50%       { border-color: rgba(184,74,42,1);   box-shadow: 0 0 0 10px rgba(184,74,42,0); }
   }
 
-  @keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
+  @keyframes mic-pulse {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(1.15); }
+    100% { transform: scale(1); }
   }
+
+  --animate-shimmer:    shimmer 1.5s ease-in-out infinite;
+  --animate-shake:      shake 0.4s ease;
+  --animate-pulse-red:  pulse-red 2s infinite;
+  --animate-mic-pulse:  mic-pulse 1.5s infinite ease-in-out;
 }
 
 @layer base {
@@ -43,39 +59,55 @@
   }
 
   body {
-    background-color: var(--color-zinc-950);
-    color: var(--color-zinc-400);
-    @apply transition-all duration-[2000ms] antialiased;
+    background-color: var(--color-agri-cream);
+    color: var(--color-agri-soil-deep);
+    @apply transition-all duration-500 antialiased;
     font-family: Inter, system-ui, sans-serif;
   }
 }
 
 @layer components {
-  .btn-press {
-    @apply active:scale-95 transition-transform duration-75;
+  /* ── Card base ── */
+  .card-agri {
+    @apply bg-agri-offwhite border border-agri-soil/20 rounded-3xl p-6 transition-all;
   }
 
+  /* Legacy dark card — remapped to light for reskin */
   .card-agri-dark {
-    @apply bg-zinc-900/50 backdrop-blur-md border border-zinc-800 rounded-[2.5rem] p-6 transition-all;
+    @apply bg-agri-offwhite border border-agri-soil/20 rounded-3xl p-6 transition-all;
   }
 
   .status-pill {
-    @apply px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5;
+    @apply px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5;
   }
 
-  .glass-card {
-    @apply bg-white/80 backdrop-blur-md border border-white/20 rounded-3xl shadow-xl transition-all duration-500;
-  }
-
-  .spinner {
-    @apply w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin;
-  }
-
+  /* Shimmer skeleton */
   .skeleton {
-    @apply bg-zinc-800 relative overflow-hidden rounded-xl;
-    background-image: linear-gradient(90deg, var(--color-zinc-800) 25%, var(--color-zinc-700) 50%, var(--color-zinc-800) 75%);
+    @apply bg-agri-soil/10 relative overflow-hidden rounded-xl;
+    background-image: linear-gradient(
+      90deg,
+      rgba(200,169,122,0.08) 25%,
+      rgba(200,169,122,0.18) 50%,
+      rgba(200,169,122,0.08) 75%
+    );
     background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  /* Progress shimmer bar */
+  .shimmer-bar {
+    @apply w-full h-1 bg-agri-green/20 rounded-full overflow-hidden;
+  }
+  .shimmer-bar-inner {
+    @apply h-full bg-agri-green/60 rounded-full;
+    background-image: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(59,109,17,0.6) 50%,
+      transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
   }
 
   /* Sunlight Mode High-Contrast Overrides */
@@ -83,43 +115,44 @@
     background-color: #000000 !important;
     color: #FFFFFF !important;
   }
-
+  .sunlight-mode .card-agri,
   .sunlight-mode .card-agri-dark {
     @apply bg-black border-2 border-white rounded-3xl shadow-none;
   }
-
   .sunlight-mode .text-agri-green,
   .sunlight-mode .text-neon-agri {
     color: var(--color-neon-agri) !important;
     @apply font-black;
   }
-
   .sunlight-mode .bg-agri-green {
     @apply bg-black border-4 border-white;
   }
 
-  .sunlight-mode .text-zinc-400 {
-    color: #FFFFFF !important;
-    @apply opacity-70;
+  .animate-mic-pulse {
+    animation: mic-pulse 1.5s infinite ease-in-out;
   }
 }
 
 /* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background-color: var(--color-gray-100);
-}
-
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background-color: color-mix(in srgb, var(--color-agri-green), transparent 80%);
+  background-color: rgba(200,169,122,0.3);
   border-radius: 9999px;
 }
 
 /* Indic Script Font Adjustments */
-[lang="hi"], [lang="pa"], [lang="bn"], [lang="gu"], [lang="mr"], [lang="kn"], [lang="ml"], [lang="ta"], [lang="te"], [lang="as"], [lang="bgc"] {
+[lang="hi"], [lang="pa"], [lang="bn"], [lang="gu"], [lang="mr"],
+[lang="kn"], [lang="ml"], [lang="ta"], [lang="te"], [lang="as"], [lang="bgc"] {
   line-height: 1.6;
 }
 
+/*
+ * Changes Made:
+ * - Replaced dark zinc palette with Agri-Tech Zen Organic palette
+ * - Added all 8 canonical color tokens (agri-green, agri-green-mid, agri-cream, agri-soil, agri-soil-deep, agri-offwhite, agri-amber, agri-terra)
+ * - Added shimmer, shake, pulse-red, mic-pulse keyframes
+ * - Added shimmer-bar / shimmer-bar-inner utility classes
+ * - card-agri-dark remapped to light cream surface
+ * - Scrollbar restyled to soil tone
+ */

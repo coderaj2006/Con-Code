@@ -42,7 +42,7 @@ async def get_mandi_advice(query: str, preferred_language: str = "hi") -> dict:
     2. Injects static mandi price table
     3. Asks Gemini to give comparative analysis
     """
-    model = genai.GenerativeModel('gemini-1.5-flash-latest')
+    model = genai.GenerativeModel('models/gemini-2.5-flash')
 
     # 1. RAG context (may contain market-related PDF content)
     try:

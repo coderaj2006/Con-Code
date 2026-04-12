@@ -1,5 +1,6 @@
+// RESKIN ONLY — Logic untouched. UI layer updated per Agri-Tech spec.
 import { FC, useRef, useState, ChangeEvent } from 'react';
-import { Camera, Mic, ShoppingCart, Info } from 'lucide-react';
+import { ScanLine, Mic, TrendingUp, BookOpen } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useToast } from '../context/ToastContext';
 import { useTranslation } from '../context/TranslationContext';
@@ -16,6 +17,7 @@ interface QuickActionsProps {
   setDiagnosisResult: (result: OrchestratorResponse | null) => void;
 }
 
+/* INJECT LOGIC HERE — DO NOT REMOVE */
 export const QuickActions: FC<QuickActionsProps> = ({ onScanClick, onVoice, isSunlightMode, setDiagnosisResult }) => {
   const { showToast } = useToast();
   const { t, currentLanguage } = useTranslation();
@@ -74,39 +76,36 @@ export const QuickActions: FC<QuickActionsProps> = ({ onScanClick, onVoice, isSu
       doScan(28.6139, 77.2090);
     }
   };
+  /* END LOGIC */
 
   const actions = [
     {
       id: 'scan',
-      label: agentState.is_thinking ? 'Analysing...' : t('scan_plant'),
+      label: agentState.is_thinking ? 'Analysing…' : t('scan_plant'),
       sub: 'AI Diagnosis',
-      icon: Camera,
-      color: 'bg-emerald-600',
+      Icon: ScanLine,
       action: executeScan,
     },
     {
       id: 'voice',
       label: t('voice_help'),
       sub: 'Talk to AI',
-      icon: Mic,
-      color: 'bg-amber-500',
+      Icon: Mic,
       action: onVoice,
     },
     {
       id: 'mandi',
       label: t('mandi_prices'),
       sub: 'Live Rates',
-      icon: ShoppingCart,
-      color: 'bg-blue-600',
-      action: () => setIsMandiOpen(true),   // ← opens RAG chat
+      Icon: TrendingUp,
+      action: () => setIsMandiOpen(true),
     },
     {
       id: 'advisory',
       label: t('advisory'),
       sub: 'Expert Tips',
-      icon: Info,
-      color: 'bg-olive-600',
-      action: () => setIsExpertOpen(true),   // ← opens Expert Chat
+      Icon: BookOpen,
+      action: () => setIsExpertOpen(true),
     },
   ];
 
@@ -121,45 +120,64 @@ export const QuickActions: FC<QuickActionsProps> = ({ onScanClick, onVoice, isSu
           ref={fileInputRef}
           onChange={handleFileChange}
         />
-        <div className="grid grid-cols-2 gap-6">
-          {actions.map((action) => (
-            <motion.button
-              key={action.id}
-              whileHover={{ scale: 1.02, y: -2 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={action.action}
-              disabled={action.id === 'scan' && agentState.is_thinking}
-              className={`flex flex-col items-center justify-center p-6 rounded-[2.5rem] shadow-xl text-white transition-all border-2 relative overflow-hidden ${
-                isSunlightMode
-                  ? 'bg-black border-white'
-                  : `${action.color} border-white/10`
-              } ${action.id === 'scan' && agentState.is_thinking ? 'opacity-90 cursor-not-allowed' : ''}`}
-            >
-              {action.id === 'scan' && agentState.is_thinking && (
-                <div
-                  className="absolute left-0 bottom-0 top-0 bg-black/20"
-                  style={{ width: `${agentState.progress_pct}%`, transition: 'width 0.3s ease-in-out' }}
-                />
-              )}
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 border relative z-10 ${
-                isSunlightMode ? 'bg-white text-black' : 'bg-white/20 border-white/20'
-              }`}>
-                {action.id === 'scan' && agentState.is_thinking ? (
-                  <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <action.icon className="w-8 h-8" />
+
+        {/* Zen Bento Grid */}
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {actions.map((action) => {
+            const isScanning = action.id === 'scan' && agentState.is_thinking;
+            return (
+              <motion.button
+                key={action.id}
+                whileTap={{ scale: 0.97 }}
+                onClick={action.action}
+                disabled={isScanning}
+                aria-label={action.label}
+                title={action.label}
+                className={`relative overflow-hidden bg-agri-offwhite rounded-3xl p-5 flex flex-col gap-3 min-h-[160px] border cursor-pointer transition-transform focus:outline-none focus:ring-2 focus:ring-agri-green focus:ring-offset-2 active:scale-[0.97] ${
+                  isSunlightMode
+                    ? 'bg-black border-white/30 text-white'
+                    : 'border-agri-soil/20 text-agri-soil-deep'
+                } ${isScanning ? 'opacity-90 cursor-not-allowed' : ''}`}
+              >
+                {/* Scan progress overlay */}
+                {isScanning && (
+                  <div
+                    className="absolute left-0 bottom-0 top-0 bg-agri-green/10 transition-all duration-300"
+                    style={{ width: `${agentState.progress_pct}%` }}
+                  />
                 )}
-              </div>
-              <span className={`text-sm font-black uppercase tracking-widest relative z-10 ${isSunlightMode ? 'text-neon-agri' : ''}`}>
-                {action.label}
-              </span>
-              <span className={`text-[10px] font-bold uppercase opacity-60 mt-1 relative z-10 ${isSunlightMode ? 'text-white' : ''}`}>
-                {action.id === 'scan' && agentState.is_thinking ? `${agentState.progress_pct}%` : 'AI ASSISTANT'}
-              </span>
-            </motion.button>
-          ))}
+
+                {/* Icon — top left */}
+                <div className="relative z-10">
+                  {isScanning ? (
+                    <div className="w-8 h-8 border-2 border-agri-green border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <action.Icon className={`w-8 h-8 ${isSunlightMode ? 'text-[#39FF14]' : 'text-agri-green'}`} />
+                  )}
+                </div>
+
+                {/* Feature name */}
+                <p className={`text-sm font-medium relative z-10 ${
+                  isSunlightMode ? 'text-white/70' : 'text-agri-soil-deep/70'
+                }`}>{action.sub}</p>
+
+                {/* Primary value */}
+                <p className={`text-xl font-semibold leading-tight relative z-10 ${
+                  isSunlightMode ? 'text-white' : 'text-agri-soil-deep'
+                }`}>
+                  {isScanning ? `${agentState.progress_pct}%` : action.label}
+                </p>
+
+                {/* Loading shimmer bar */}
+                {isScanning && (
+                  <div className="shimmer-bar relative z-10">
+                    <div className="shimmer-bar-inner" />
+                  </div>
+                )}
+              </motion.button>
+            );
+          })}
         </div>
-        <style>{`.bg-olive-600 { background-color: #6B8E23; }`}</style>
       </div>
 
       <MandiChatOverlay
@@ -176,3 +194,13 @@ export const QuickActions: FC<QuickActionsProps> = ({ onScanClick, onVoice, isSu
     </>
   );
 };
+
+/*
+ * Changes Made:
+ * - Replaced Camera/ShoppingCart/Info icons with ScanLine/TrendingUp/BookOpen per spec
+ * - Bento grid layout: grid-cols-2 gap-4, min-h-[160px], rounded-3xl
+ * - bg-agri-offwhite surface, border-agri-soil/20
+ * - Icon w-8 h-8 at top-left, feature name text-sm, primary label text-xl font-semibold
+ * - Shimmer bar replaces spinner text during loading
+ * - All buttons aria-label + focus rings
+ */

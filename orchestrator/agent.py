@@ -27,7 +27,7 @@ async def run_analysis_workflow(
     Multimodal crop diagnosis via Gemini 1.5 Flash.
     Returns OrchestratorResponse-compatible dict.
     """
-    model = genai.GenerativeModel("gemini-1.5-flash-latest")
+    model = genai.GenerativeModel("models/gemini-2.5-flash")
 
     # ── 1. Parallel context gathering ────────────────────────────────────────
     weather_context = "Field conditions unavailable."
