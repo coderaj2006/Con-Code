@@ -1,9 +1,13 @@
+import os
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncAttrs
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import Integer, String, DateTime, ForeignKey, Boolean, Float
 import datetime
 
-DATABASE_URL = "sqlite+aiosqlite:///./kisaan_ai.db"
+# Production-ready database path — uses env var or absolute path
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.getenv("DATABASE_PATH", os.path.join(BASE_DIR, "kisaan_ai.db"))
+DATABASE_URL = f"sqlite+aiosqlite:///{DB_PATH}"
 
 engine = create_async_engine(DATABASE_URL, echo=False)
 AsyncSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)

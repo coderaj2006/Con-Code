@@ -34,15 +34,20 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ── Bootstrap dirs before app.mount() ────────────────────────────────────────
-os.makedirs("uploads", exist_ok=True)
-os.makedirs("uploads/audio", exist_ok=True)
-os.makedirs("chroma_db", exist_ok=True)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
+AUDIO_DIR = os.path.join(UPLOADS_DIR, "audio")
+CHROMA_DIR = os.path.join(BASE_DIR, "chroma_db")
+
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+os.makedirs(AUDIO_DIR, exist_ok=True)
+os.makedirs(CHROMA_DIR, exist_ok=True)
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    chroma_populated = os.path.isdir("chroma_db") and any(
-        f != ".gitkeep" for f in os.listdir("chroma_db")
+    chroma_populated = os.path.isdir(CHROMA_DIR) and any(
+        f != ".gitkeep" for f in os.listdir(CHROMA_DIR)
     )
     if chroma_populated:
         logger.info("RAG vector store ready.")
@@ -57,8 +62,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Kisaan AI", description="AI-powered Agri-Assistant", lifespan=lifespan)
 
-app.mount("/static", StaticFiles(directory="uploads"), name="static")
-app.mount("/audio",  StaticFiles(directory="uploads/audio"), name="audio")
+app.mount("/static", StaticFiles(directory=UPLOADS_DIR), name="static")
+app.mount("/audio",  StaticFiles(directory=AUDIO_DIR), name="audio")
 
 app.add_middleware(
     CORSMiddleware,
@@ -98,7 +103,7 @@ def _generate_speech_sync(text: str, path: str, lang: str = "hi"):
     gTTS(text=text, lang=lang, slow=False).save(path)
 
 async def generate_speech(text: str, file_id: str, lang: str = "hi") -> str:
-    path = f"uploads/audio/{file_id}.mp3"
+    path = os.path.join(AUDIO_DIR, f"{file_id}.mp3")
     await asyncio.to_thread(_generate_speech_sync, text, path, lang)
     base = os.getenv("VITE_API_URL", "http://localhost:8002")
     return f"{base}/audio/{file_id}.mp3"
