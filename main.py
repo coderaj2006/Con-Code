@@ -21,6 +21,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from gtts import gTTS
 
+# ── New imports for RAG Advisory Agent (additive — no existing imports removed) ──
+from advisory_agent import get_advice as get_expert_advice
+
 from models import init_db, get_db, FarmerProfile, DiagnosisHistory, Notification, User
 from fcm_service import send_fcm_notification
 from ml.weather_risk_model import risk_engine
@@ -82,6 +85,13 @@ class ChatResponse(BaseModel):
 class MandiChatRequest(BaseModel):
     message: str
     language: str = "hi"
+
+# New schema for Expert Chat (additive)
+class ExpertChatRequest(BaseModel):
+    message: str
+    language: Optional[str] = None   # None = auto-detect from query
+    lat: float = 28.6139
+    lon: float = 77.2090
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 def _generate_speech_sync(text: str, path: str, lang: str = "hi"):
@@ -418,6 +428,32 @@ async def get_unread_notifications(
         n.is_read = True
     await db.commit()
     return {"unread_count": len(out), "alerts": out}
+
+
+@app.post("/expert-chat", tags=["Expert Advisory"])
+async def expert_chat(req: ExpertChatRequest):
+    """
+    RAG-powered Expert Advisory endpoint.
+    - Searches FAISS index built from /data PDFs
+    - Auto-detects language from query if not provided
+    - Reads weather context from weather_agent (read-only)
+    - Returns mobile-formatted, compassionate response
+    """
+    try:
+        result = await get_expert_advice(
+            query=req.message,
+            lat=req.lat,
+            lon=req.lon,
+            preferred_language=req.language,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"/expert-chat error: {e}", exc_info=True)
+        return JSONResponse(status_code=500, content={
+            "error": "Expert advisory unavailable. Please try again.",
+            "response": "Sorry, I'm having trouble right now. Please try again.",
+            "language_code": req.language or "hi",
+        })
 
 
 if __name__ == "__main__":

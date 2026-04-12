@@ -26,3 +26,5 @@ langchain-community
 langchain-chroma
 python-jose[cryptography]
 passlib[bcrypt]
+faiss-cpu
+langdetect

@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { analyzeCrop } from '../services/api';
 import { OrchestratorResponse, AgentState } from './DiagnosisDisplay';
 import { MandiChatOverlay } from './MandiChatOverlay';
+import { ExpertChatOverlay } from './ExpertChatOverlay';
 
 interface QuickActionsProps {
   onScanClick?: () => void;
@@ -21,6 +22,7 @@ export const QuickActions: FC<QuickActionsProps> = ({ onScanClick, onVoice, isSu
   const { getAuthHeaders } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isMandiOpen, setIsMandiOpen] = useState(false);
+  const [isExpertOpen, setIsExpertOpen] = useState(false);
 
   const [agentState, setAgentState] = useState<AgentState>({
     phase: 'IDLE',
@@ -104,7 +106,7 @@ export const QuickActions: FC<QuickActionsProps> = ({ onScanClick, onVoice, isSu
       sub: 'Expert Tips',
       icon: Info,
       color: 'bg-olive-600',
-      action: onVoice,                      // routes to AI chat
+      action: () => setIsExpertOpen(true),   // ← opens Expert Chat
     },
   ];
 
@@ -163,6 +165,12 @@ export const QuickActions: FC<QuickActionsProps> = ({ onScanClick, onVoice, isSu
       <MandiChatOverlay
         isOpen={isMandiOpen}
         onClose={() => setIsMandiOpen(false)}
+        isSunlightMode={isSunlightMode}
+      />
+
+      <ExpertChatOverlay
+        isOpen={isExpertOpen}
+        onClose={() => setIsExpertOpen(false)}
         isSunlightMode={isSunlightMode}
       />
     </>
