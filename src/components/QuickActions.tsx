@@ -283,7 +283,6 @@ export const QuickActions: FC<QuickActionsProps> = ({ onScanClick, onVoice, isSu
             );
           })}
         </div>
-        </div>
       </div>
 
       <MandiChatOverlay

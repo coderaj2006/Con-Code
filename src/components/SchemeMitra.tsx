@@ -6,7 +6,6 @@ import {
   AlertCircle, 
   CheckCircle2, 
   XCircle, 
-  Info, 
   FileText, 
   MapPin,
   ArrowLeft
