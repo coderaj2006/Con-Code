@@ -32,8 +32,10 @@ def _build_faiss_store():
     """
     Builds a FAISS index from /data PDFs using GoogleGenerativeAIEmbeddings.
     Falls back gracefully if PDFs are missing or embeddings fail.
+    Batches with delay to respect free-tier rate limits (100 req/min).
     """
     try:
+        import time
         from langchain_community.document_loaders import PyPDFLoader
         from langchain_text_splitters import RecursiveCharacterTextSplitter
         from langchain_community.vectorstores import FAISS
@@ -44,7 +46,7 @@ def _build_faiss_store():
         faiss_dir = os.path.join(base_dir, "faiss_index")
 
         embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/text-embedding-004",
+            model="models/gemini-embedding-001",
             google_api_key=config.GEMINI_API_KEY,
         )
 
@@ -64,7 +66,8 @@ def _build_faiss_store():
             return None
 
         logger.info(f"Building FAISS index from {len(pdf_files)} PDFs...")
-        splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=80)
+        # Smaller chunks = fewer embedding calls = stays under rate limit
+        splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=100)
         all_chunks = []
 
         for pdf in pdf_files:
@@ -79,10 +82,36 @@ def _build_faiss_store():
         if not all_chunks:
             return None
 
-        store = FAISS.from_documents(all_chunks, embeddings)
+        logger.info(f"Embedding {len(all_chunks)} chunks in batches (rate-limit safe)...")
+
+        # Build in batches of 80 with a 65-second pause between batches
+        # Free tier: 100 req/min → 80 per batch gives headroom
+        BATCH_SIZE = 80
+        store = None
+
+        for i in range(0, len(all_chunks), BATCH_SIZE):
+            batch = all_chunks[i:i + BATCH_SIZE]
+            logger.info(f"  Batch {i // BATCH_SIZE + 1}: chunks {i+1}–{i+len(batch)}")
+            try:
+                if store is None:
+                    store = FAISS.from_documents(batch, embeddings)
+                else:
+                    store.add_documents(batch)
+            except Exception as e:
+                logger.error(f"  Batch failed: {e}")
+                break
+
+            # Pause between batches to avoid quota errors
+            if i + BATCH_SIZE < len(all_chunks):
+                logger.info("  Pausing 65s for rate limit...")
+                time.sleep(65)
+
+        if store is None:
+            return None
+
         os.makedirs(faiss_dir, exist_ok=True)
         store.save_local(faiss_dir)
-        logger.info(f"FAISS index built and saved ({len(all_chunks)} chunks).")
+        logger.info(f"FAISS index built and saved ({len(all_chunks)} chunks total).")
         return store
 
     except Exception as e:
@@ -145,7 +174,7 @@ async def get_advice(
     - Reads weather context (read-only, weather_agent.py untouched)
     - Returns mobile-optimised, compassionate response
     """
-    model = genai.GenerativeModel("gemini-1.5-flash-latest")
+    model = genai.GenerativeModel("models/gemini-2.5-flash")
 
     # 1. Language detection
     lang = preferred_language or _detect_language(query)

@@ -137,7 +137,7 @@ export const ExpertChatOverlay: FC<ExpertChatOverlayProps> = ({
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60]"
             onClick={onClose}
           />
 
@@ -145,10 +145,10 @@ export const ExpertChatOverlay: FC<ExpertChatOverlayProps> = ({
           <motion.div
             initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 26, stiffness: 220 }}
-            className={`fixed bottom-0 left-0 right-0 max-w-md mx-auto rounded-t-[3rem] z-50 flex flex-col overflow-hidden ${
+            className={`fixed bottom-0 left-0 right-0 max-w-md mx-auto rounded-t-[3rem] z-[60] flex flex-col overflow-hidden ${
               dark ? 'bg-black border-t-4 border-x-4 border-emerald-400' : 'bg-zinc-950'
             }`}
-            style={{ height: '90vh' }}
+            style={{ height: '82vh', maxHeight: '82vh', paddingBottom: '0' }}
           >
             {/* Header */}
             <div className={`flex items-center justify-between px-5 pt-5 pb-4 border-b ${
