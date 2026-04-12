@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: kisaan-ai-backend
+    env: docker
+    dockerfilePath: ./Dockerfile.production
+    plan: free
+    region: singapore
+    healthCheckPath: /health
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENWEATHERMAP_API_KEY
+        sync: false
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: VITE_API_URL
+        value: https://kisaan-ai-backend.onrender.com
+      - key: DATABASE_PATH
+        value: /var/data/kisaan_ai.db
+    disk:
+      name: kisaan-data
+      mountPath: /var/data
+      sizeGB: 1
