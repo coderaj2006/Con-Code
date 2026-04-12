@@ -57,7 +57,7 @@ passlib[bcrypt]==1.7.4
 # Firebase & Cloud
 # ═══════════════════════════════════════════════════════════════════════════════
 firebase-admin==6.6.0
-protobuf==5.29.6  # ⚠️ REVIEW: 7.34.1 available (major version jump)
+protobuf==4.25.5  # ⚠️ REVIEW: 7.34.1 available (major version jump)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Utilities
