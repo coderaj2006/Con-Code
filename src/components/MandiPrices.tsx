@@ -1,3 +1,4 @@
+// RESKIN ONLY — Logic untouched. UI layer updated per Agri-Tech spec.
 import { FC, useEffect, useState } from 'react';
 import { TrendingUp, TrendingDown, Minus, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -16,6 +17,7 @@ interface MandiPricesProps {
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:8002';
 
+/* INJECT LOGIC HERE — DO NOT REMOVE */
 export const MandiPrices: FC<MandiPricesProps> = ({ isSunlightMode }) => {
   const [prices, setPrices] = useState<MandiPrice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,11 +32,10 @@ export const MandiPrices: FC<MandiPricesProps> = ({ isSunlightMode }) => {
         setPrices(data.mandi);
       }
     } catch {
-      // fallback static data
       setPrices([
-        { crop: 'Tomato', price: 2400, unit: 'Quintal', trend: 'up', market: 'Azadpur' },
+        { crop: 'Tomato', price: 2400, unit: 'Quintal', trend: 'up',     market: 'Azadpur' },
         { crop: 'Wheat',  price: 2100, unit: 'Quintal', trend: 'stable', market: 'Lucknow' },
-        { crop: 'Potato', price: 1200, unit: 'Quintal', trend: 'down', market: 'Indore' },
+        { crop: 'Potato', price: 1200, unit: 'Quintal', trend: 'down',   market: 'Indore' },
       ]);
     } finally {
       setLoading(false);
@@ -43,38 +44,46 @@ export const MandiPrices: FC<MandiPricesProps> = ({ isSunlightMode }) => {
   };
 
   useEffect(() => { fetchPrices(); }, []);
+  /* END LOGIC */
 
   const TrendIcon = ({ trend }: { trend: string }) => {
-    if (trend === 'up')     return <TrendingUp   className="w-4 h-4 text-emerald-400" />;
-    if (trend === 'down')   return <TrendingDown  className="w-4 h-4 text-red-400" />;
-    return                         <Minus         className="w-4 h-4 text-zinc-400" />;
+    if (trend === 'up')   return <TrendingUp   className="w-5 h-5 text-agri-green" />;
+    if (trend === 'down') return <TrendingDown  className="w-5 h-5 text-agri-terra" />;
+    return                       <Minus         className="w-5 h-5 text-agri-soil/50" />;
   };
 
-  const trendColor = (trend: string) =>
-    trend === 'up' ? 'text-emerald-400' : trend === 'down' ? 'text-red-400' : 'text-zinc-400';
+  const trendValueColor = (trend: string) =>
+    trend === 'up' ? 'text-agri-green' : trend === 'down' ? 'text-agri-terra' : 'text-agri-soil-deep';
 
   return (
-    <div className={`card-agri-dark ${isSunlightMode ? 'bg-black border-4 border-white' : ''}`}>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-sm font-black uppercase tracking-widest text-white flex items-center gap-2">
-          <span className={`w-1.5 h-6 rounded-full ${isSunlightMode ? 'bg-neon-agri' : 'bg-blue-500'}`} />
+    <div className={`card-agri-dark ${isSunlightMode ? 'bg-black border-2 border-white' : ''}`}>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className={`text-lg font-medium flex items-center gap-2 ${
+          isSunlightMode ? 'text-white' : 'text-agri-soil-deep'
+        }`}>
+          <TrendingUp className={`w-5 h-5 ${isSunlightMode ? 'text-[#39FF14]' : 'text-agri-green'}`} />
           Mandi Prices
         </h2>
         <div className="flex items-center gap-2">
           {lastUpdated && (
-            <span className="text-[9px] font-bold uppercase text-zinc-500">{lastUpdated}</span>
+            <span className={`text-xs ${isSunlightMode ? 'text-white/50' : 'text-agri-soil/60'}`}>{lastUpdated}</span>
           )}
           <motion.button
             whileTap={{ scale: 0.9 }}
             onClick={fetchPrices}
             disabled={loading}
-            className={`p-2 rounded-xl transition-all ${isSunlightMode ? 'bg-white/10 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-white'}`}
+            aria-label="Refresh mandi prices"
+            title="Refresh mandi prices"
+            className={`p-2 min-h-[44px] min-w-[44px] rounded-xl transition-all focus:outline-none focus:ring-2 focus:ring-agri-green focus:ring-offset-2 ${
+              isSunlightMode ? 'bg-white/10 text-white' : 'bg-agri-cream text-agri-soil hover:text-agri-soil-deep'
+            }`}
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
           </motion.button>
         </div>
       </div>
 
+      {/* Loading shimmer */}
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map(i => (
@@ -82,49 +91,53 @@ export const MandiPrices: FC<MandiPricesProps> = ({ isSunlightMode }) => {
           ))}
         </div>
       ) : (
-        <div className="space-y-3">
+        /* Card list with divide-y */
+        <div className={`rounded-2xl overflow-hidden border divide-y ${
+          isSunlightMode ? 'border-white/20 divide-white/10' : 'border-agri-soil/15 divide-agri-soil/10'
+        }`}>
           {prices.map((item, idx) => (
             <motion.div
               key={idx}
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: idx * 0.08 }}
-              className={`flex items-center justify-between px-4 py-3 rounded-2xl border ${
-                isSunlightMode
-                  ? 'bg-white/5 border-white/10'
-                  : 'bg-zinc-800/60 border-zinc-700/50'
+              className={`flex justify-between items-center px-4 py-4 ${
+                isSunlightMode ? 'bg-white/5' : 'bg-agri-offwhite'
               }`}
             >
+              {/* Left: crop name + market */}
               <div>
-                <p className={`text-sm font-black uppercase tracking-tight ${isSunlightMode ? 'text-neon-agri' : 'text-white'}`}>
+                <p className={`text-base font-medium ${isSunlightMode ? 'text-white' : 'text-agri-soil-deep'}`}>
                   {item.crop}
                 </p>
-                <p className="text-[10px] font-bold uppercase text-zinc-500">{item.market}</p>
+                <p className={`text-xs ${isSunlightMode ? 'text-white/50' : 'text-agri-soil/60'}`}>{item.market}</p>
               </div>
+
+              {/* Right: price + trend */}
               <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <p className={`text-base font-black ${isSunlightMode ? 'text-white' : 'text-white'}`}>
-                    ₹{item.price.toLocaleString()}
-                  </p>
-                  <p className="text-[9px] font-bold uppercase text-zinc-500">per {item.unit}</p>
-                </div>
-                <div className={`flex items-center gap-1 px-2 py-1 rounded-xl ${
-                  item.trend === 'up' ? 'bg-emerald-500/10' : item.trend === 'down' ? 'bg-red-500/10' : 'bg-zinc-700/50'
-                }`}>
-                  <TrendIcon trend={item.trend} />
-                  <span className={`text-[10px] font-black uppercase ${trendColor(item.trend)}`}>
-                    {item.trend}
-                  </span>
-                </div>
+                <p className={`text-xl font-semibold ${trendValueColor(item.trend)}`}>
+                  ₹{item.price.toLocaleString()}
+                </p>
+                <TrendIcon trend={item.trend} />
               </div>
             </motion.div>
           ))}
         </div>
       )}
 
-      <p className="text-[9px] font-bold uppercase text-zinc-600 text-center mt-4">
+      <p className={`text-xs text-center mt-4 ${isSunlightMode ? 'text-white/30' : 'text-agri-soil/60'}`}>
         Prices sourced from Agmarknet • Updated daily
       </p>
     </div>
   );
 };
+
+/*
+ * Changes Made:
+ * - Dark zinc cards → agri-offwhite with divide-y divide-agri-soil/10
+ * - Trend up → agri-green, trend down → agri-terra (color + icon, never color alone)
+ * - Price text-xl font-semibold in trend color
+ * - Crop name text-base font-medium, market text-xs text-agri-soil/60
+ * - Refresh button min-h-[44px] with focus ring
+ * - Loading uses skeleton shimmer
+ */

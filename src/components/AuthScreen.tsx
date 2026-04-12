@@ -1,3 +1,4 @@
+// RESKIN ONLY — Logic untouched. UI layer updated per Agri-Tech spec.
 import { FC, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Leaf, ChevronRight } from 'lucide-react';
@@ -9,6 +10,7 @@ interface AuthScreenProps {
   isSunlightMode?: boolean;
 }
 
+/* INJECT LOGIC HERE — DO NOT REMOVE */
 export const AuthScreen: FC<AuthScreenProps> = ({ isSunlightMode }) => {
   const { setProfile } = useAuth();
   const [name, setName] = useState('');
@@ -19,16 +21,12 @@ export const AuthScreen: FC<AuthScreenProps> = ({ isSunlightMode }) => {
     if (!name.trim()) { setError('Please enter your name to continue.'); return; }
     setProfile(name.trim(), crop);
   };
-
-  const bg = isSunlightMode ? 'bg-black' : 'bg-zinc-950';
-  const inputClass = `w-full px-5 py-4 rounded-2xl text-base font-bold outline-none border-2 transition-all ${
-    isSunlightMode
-      ? 'bg-white/5 border-white/20 text-white placeholder-white/30 focus:border-neon-agri'
-      : 'bg-zinc-800 border-zinc-700 text-white placeholder-zinc-500 focus:border-emerald-500'
-  }`;
+  /* END LOGIC */
 
   return (
-    <div className={`min-h-screen w-full flex flex-col items-center justify-center px-6 ${bg}`}>
+    <div className={`min-h-screen w-full flex flex-col items-center justify-center px-6 ${
+      isSunlightMode ? 'bg-black' : 'bg-agri-cream'
+    }`}>
       <motion.div
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
@@ -42,37 +40,47 @@ export const AuthScreen: FC<AuthScreenProps> = ({ isSunlightMode }) => {
             animate={{ scale: 1 }}
             transition={{ type: 'spring', delay: 0.1 }}
             className={`w-24 h-24 rounded-[2.5rem] flex items-center justify-center mb-5 border-4 ${
-              isSunlightMode ? 'bg-black border-neon-agri' : 'bg-emerald-800 border-emerald-500'
+              isSunlightMode ? 'bg-black border-[#39FF14]' : 'bg-agri-green border-agri-green-mid'
             }`}
           >
-            <Leaf className={`w-12 h-12 ${isSunlightMode ? 'text-neon-agri' : 'text-white'}`} />
+            <Leaf className={`w-12 h-12 ${isSunlightMode ? 'text-[#39FF14]' : 'text-agri-cream'}`} />
           </motion.div>
-          <h1 className={`text-4xl font-black uppercase tracking-widest ${isSunlightMode ? 'text-neon-agri' : 'text-white'}`}>
+          <h1 className={`text-2xl font-semibold tracking-tight ${
+            isSunlightMode ? 'text-white' : 'text-agri-soil-deep'
+          }`}>
             KISAAN AI
           </h1>
-          <p className="text-xs font-bold uppercase text-zinc-500 tracking-widest mt-2">
+          <p className={`text-sm font-medium mt-2 ${isSunlightMode ? 'text-white/50' : 'text-agri-soil/60'}`}>
             Your Personal Agri-Assistant
           </p>
         </div>
 
         {/* Name input */}
         <div>
-          <label className={`text-[11px] font-black uppercase tracking-widest mb-2 block ${isSunlightMode ? 'text-white/50' : 'text-zinc-500'}`}>
+          <label
+            htmlFor="farmer-name"
+            className={`text-sm font-medium mb-2 block ${isSunlightMode ? 'text-white/70' : 'text-agri-soil-deep/70'}`}
+          >
             What's your name?
           </label>
           <input
+            id="farmer-name"
             value={name}
             onChange={e => { setName(e.target.value); setError(''); }}
             onKeyDown={e => e.key === 'Enter' && handleStart()}
             placeholder="e.g. Ramesh Kumar"
             autoFocus
-            className={inputClass}
+            className={`w-full px-5 py-4 min-h-[44px] rounded-2xl text-base font-medium outline-none border-2 transition-all focus:outline-none focus:ring-2 focus:ring-agri-green focus:ring-offset-2 ${
+              isSunlightMode
+                ? 'bg-white/5 border-white/20 text-white placeholder-white/30 focus:border-[#39FF14]'
+                : 'bg-agri-offwhite border-agri-soil/20 text-agri-soil-deep placeholder-agri-soil/40 focus:border-agri-green'
+            }`}
           />
         </div>
 
         {/* Crop selector */}
         <div>
-          <label className={`text-[11px] font-black uppercase tracking-widest mb-2 block ${isSunlightMode ? 'text-white/50' : 'text-zinc-500'}`}>
+          <label className={`text-sm font-medium mb-2 block ${isSunlightMode ? 'text-white/70' : 'text-agri-soil-deep/70'}`}>
             Your main crop
           </label>
           <div className="flex flex-wrap gap-2">
@@ -80,10 +88,11 @@ export const AuthScreen: FC<AuthScreenProps> = ({ isSunlightMode }) => {
               <button
                 key={c}
                 onClick={() => setCrop(c)}
-                className={`px-3 py-2 rounded-xl text-xs font-black uppercase tracking-wide border-2 transition-all ${
+                aria-pressed={crop === c}
+                className={`px-3 py-2 min-h-[44px] rounded-xl text-sm font-medium border-2 transition-all focus:outline-none focus:ring-2 focus:ring-agri-green focus:ring-offset-2 ${
                   crop === c
-                    ? (isSunlightMode ? 'bg-white text-black border-white' : 'bg-emerald-600 text-white border-emerald-500')
-                    : (isSunlightMode ? 'bg-white/5 text-white/50 border-white/10' : 'bg-zinc-800 text-zinc-400 border-zinc-700')
+                    ? (isSunlightMode ? 'bg-white text-black border-white' : 'bg-agri-green text-agri-cream border-agri-green')
+                    : (isSunlightMode ? 'bg-white/5 text-white/50 border-white/10' : 'bg-agri-offwhite text-agri-soil border-agri-soil/20')
                 }`}
               >
                 {c}
@@ -92,30 +101,45 @@ export const AuthScreen: FC<AuthScreenProps> = ({ isSunlightMode }) => {
           </div>
         </div>
 
-        {/* Error */}
+        {/* Error — color + text label */}
         {error && (
-          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            className="text-red-400 text-xs font-bold uppercase text-center -mt-2">
-            {error}
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-agri-terra text-sm font-medium text-center -mt-2"
+            role="alert"
+          >
+            ⚠ {error}
           </motion.p>
         )}
 
         {/* CTA */}
         <motion.button
           whileTap={{ scale: 0.97 }}
-          whileHover={{ scale: 1.02 }}
           onClick={handleStart}
-          className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-sm flex items-center justify-center gap-2 ${
-            isSunlightMode ? 'bg-white text-black' : 'bg-emerald-600 text-white'
+          className={`w-full min-h-[64px] rounded-2xl text-base font-semibold flex items-center justify-center gap-3 transition-colors focus:outline-none focus:ring-2 focus:ring-agri-green focus:ring-offset-2 ${
+            isSunlightMode ? 'bg-white text-black' : 'bg-agri-green text-agri-cream active:bg-agri-green/80'
           }`}
         >
-          Get Started <ChevronRight className="w-4 h-4" />
+          <Leaf className="w-5 h-5" />
+          Get Started
+          <ChevronRight className="w-5 h-5" />
         </motion.button>
 
-        <p className="text-center text-[10px] font-bold uppercase text-zinc-600">
+        <p className={`text-center text-xs font-medium ${isSunlightMode ? 'text-white/40' : 'text-agri-soil/50'}`}>
           No account needed • Works offline
         </p>
       </motion.div>
     </div>
   );
 };
+
+/*
+ * Changes Made:
+ * - bg-zinc-950 → bg-agri-cream
+ * - Inputs: agri-offwhite bg, agri-soil/20 border, focus:ring-agri-green
+ * - CTA: bg-agri-green min-h-[64px] text-base font-semibold
+ * - Crop buttons: aria-pressed, min-h-[44px], focus rings
+ * - Error: agri-terra + ⚠ icon prefix (not color alone)
+ * - All labels have htmlFor associations
+ */

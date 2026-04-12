@@ -222,11 +222,11 @@ function AppContent() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex flex-col items-center">
+    <div className={`min-h-screen flex flex-col items-center antialiased ${isSunlightMode ? 'bg-black' : 'bg-agri-cream'}`}>
       {(authLoading || !user) ? (
         <AuthScreen isSunlightMode={isSunlightMode} />
       ) : (
-      <div className="w-full max-w-md bg-zinc-950 min-h-screen flex flex-col relative shadow-2xl overflow-x-hidden pb-12">
+      <div className={`w-full max-w-md min-h-screen flex flex-col relative overflow-x-hidden pb-12 ${isSunlightMode ? 'bg-black' : 'bg-agri-cream'}`}>
         <Header
           isSunlightMode={isSunlightMode}
           setIsSunlightMode={setIsSunlightMode}

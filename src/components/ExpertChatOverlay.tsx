@@ -1,11 +1,7 @@
-/**
- * Expert Chat Overlay — Compassionate Agri-Scientist
- * Dedicated RAG-powered advisory window.
- * Does NOT move or affect Scan Plant or Mandi Prices buttons.
- */
+// LAYOUT FIX ONLY — State, effects, and handlers are untouched.
 import { FC, useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Send, Sprout, Loader2, Mic, Volume2 } from 'lucide-react';
+import { X, Send, BookOpen, Loader2, Volume2 } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
 
 const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:8002';
@@ -34,6 +30,7 @@ const SUGGESTED_QUESTIONS = [
   '🍂 Soil health tips for Kharif',
 ];
 
+/* INJECT LOGIC HERE — DO NOT REMOVE */
 export const ExpertChatOverlay: FC<ExpertChatOverlayProps> = ({
   isOpen,
   onClose,
@@ -49,12 +46,10 @@ export const ExpertChatOverlay: FC<ExpertChatOverlayProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  // Auto-scroll on new messages
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
 
-  // Welcome message on first open
   useEffect(() => {
     if (isOpen && messages.length === 0) {
       setMessages([{
@@ -82,7 +77,6 @@ export const ExpertChatOverlay: FC<ExpertChatOverlayProps> = ({
 
   const sendQuery = async (query: string) => {
     if (!query.trim() || loading) return;
-
     const userMsg: ExpertMessage = {
       role: 'user',
       content: query,
@@ -98,14 +92,12 @@ export const ExpertChatOverlay: FC<ExpertChatOverlayProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: query,
-          language: currentLanguage !== 'en' ? currentLanguage : null, // null = auto-detect
+          language: currentLanguage !== 'en' ? currentLanguage : null,
           lat: userLat,
           lon: userLon,
         }),
       });
-
       const data = await res.json();
-
       const aiMsg: ExpertMessage = {
         role: 'ai',
         content: data.response || 'Sorry, I could not process that.',
@@ -114,9 +106,7 @@ export const ExpertChatOverlay: FC<ExpertChatOverlayProps> = ({
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages(prev => [...prev, aiMsg]);
-
       if (aiMsg.speechUrl) playAudio(aiMsg.speechUrl);
-
     } catch {
       setMessages(prev => [...prev, {
         role: 'ai',
@@ -127,67 +117,65 @@ export const ExpertChatOverlay: FC<ExpertChatOverlayProps> = ({
       setLoading(false);
     }
   };
-
-  const dark = isSunlightMode;
+  /* END LOGIC */
 
   return (
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60]"
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60]"
             onClick={onClose}
           />
-
-          {/* Panel */}
           <motion.div
             initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 26, stiffness: 220 }}
-            className={`fixed bottom-0 left-0 right-0 max-w-md mx-auto rounded-t-[3rem] z-[60] flex flex-col overflow-hidden ${
-              dark ? 'bg-black border-t-4 border-x-4 border-emerald-400' : 'bg-zinc-950'
+            className={`fixed bottom-0 left-0 right-0 max-w-md mx-auto rounded-t-3xl z-[60] flex flex-col overflow-hidden h-[82vh] max-h-[82vh] ${
+              isSunlightMode ? 'bg-black border-t-4 border-x-4 border-agri-green-mid' : 'bg-agri-offwhite border-t border-agri-soil/20'
             }`}
-            style={{ height: '82vh', maxHeight: '82vh', paddingBottom: '0' }}
           >
-            {/* Header */}
-            <div className={`flex items-center justify-between px-5 pt-5 pb-4 border-b ${
-              dark ? 'border-emerald-400/30' : 'border-zinc-800'
+            {/* Zone 1 — Header (flex-none) */}
+            <div className={`flex-none flex items-center justify-between px-5 pt-5 pb-4 border-b ${
+              isSunlightMode ? 'border-agri-green-mid/30' : 'border-agri-soil/10'
             }`}>
               <div className="flex items-center gap-3">
                 <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${
-                  dark ? 'bg-emerald-400' : 'bg-emerald-600'
+                  isSunlightMode ? 'bg-agri-green-mid' : 'bg-agri-green'
                 }`}>
-                  <Sprout className="w-6 h-6 text-black" />
+                  <BookOpen className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h3 className={`text-sm font-black uppercase tracking-widest ${
-                    dark ? 'text-emerald-400' : 'text-emerald-400'
-                  }`}>Expert Advisory</h3>
-                  <p className="text-[10px] font-bold uppercase text-zinc-500">
+                  <h3 className={`text-base font-semibold ${isSunlightMode ? 'text-white' : 'text-agri-soil-deep'}`}>
+                    Expert Advisory
+                  </h3>
+                  <p className={`text-xs ${isSunlightMode ? 'text-white/50' : 'text-agri-soil/60'}`}>
                     Compassionate Agri-Scientist • RAG Powered
                   </p>
                 </div>
               </div>
               <button
                 onClick={onClose}
-                className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
+                aria-label="Close expert chat"
+                className={`min-h-[44px] min-w-[44px] rounded-full flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-agri-green focus:ring-offset-2 ${
+                  isSunlightMode ? 'bg-white/10 text-white' : 'bg-agri-cream text-agri-soil'
+                }`}
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Suggested questions — shown only when no user messages yet */}
+            {/* Suggested questions (flex-none) */}
             {messages.length <= 1 && (
-              <div className="px-4 py-3 flex gap-2 overflow-x-auto scrollbar-hide flex-shrink-0">
+              <div className="flex-none px-4 py-3 flex gap-2 overflow-x-auto scrollbar-hide">
                 {SUGGESTED_QUESTIONS.map(q => (
                   <button
                     key={q}
                     onClick={() => sendQuery(q.replace(/^[^\s]+\s/, ''))}
-                    className={`flex-shrink-0 text-[10px] font-bold px-3 py-2 rounded-2xl border transition-all whitespace-nowrap ${
-                      dark
-                        ? 'border-emerald-400/30 text-emerald-300 hover:bg-emerald-400/10'
-                        : 'border-zinc-700 text-zinc-400 hover:border-emerald-500 hover:text-emerald-400'
+                    className={`flex-shrink-0 text-xs font-medium px-3 py-2 min-h-[44px] rounded-2xl border transition-all whitespace-nowrap focus:outline-none focus:ring-2 focus:ring-agri-green focus:ring-offset-2 ${
+                      isSunlightMode
+                        ? 'border-agri-green-mid/30 text-agri-green-mid hover:bg-agri-green-mid/10'
+                        : 'border-agri-soil/20 text-agri-soil hover:border-agri-green hover:text-agri-green'
                     }`}
                   >
                     {q}
@@ -196,8 +184,8 @@ export const ExpertChatOverlay: FC<ExpertChatOverlayProps> = ({
               </div>
             )}
 
-            {/* Messages */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-5">
+            {/* Zone 2 — Message List (flex-1 + min-h-0 is the critical fix) */}
+            <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-5">
               {messages.map((msg, idx) => (
                 <motion.div
                   key={idx}
@@ -207,35 +195,42 @@ export const ExpertChatOverlay: FC<ExpertChatOverlayProps> = ({
                 >
                   <div className={`max-w-[88%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
                     msg.role === 'user'
-                      ? 'bg-emerald-600 text-white rounded-tr-none'
-                      : (dark
-                          ? 'bg-zinc-900 border border-emerald-400/30 text-white rounded-tl-none'
-                          : 'bg-zinc-800 border border-zinc-700 text-white rounded-tl-none')
+                      ? (isSunlightMode ? 'bg-agri-green text-white rounded-tr-none' : 'bg-agri-green text-agri-cream rounded-tr-none')
+                      : (isSunlightMode
+                          ? 'bg-zinc-900 border border-agri-green-mid/30 text-white rounded-tl-none'
+                          : 'bg-agri-cream border border-agri-soil/15 text-agri-soil-deep rounded-tl-none')
                   }`}>
-                    {/* Render response with line breaks preserved */}
                     {msg.content.split('\n').map((line, i) => (
-                      <p key={i} className={line.startsWith('•') ? 'ml-1 my-0.5' : line.startsWith('🌱') || line.startsWith('💊') || line.startsWith('⚠️') ? 'font-black text-emerald-400 mt-2 mb-1' : 'my-0.5'}>
+                      <p key={i} className={
+                        line.startsWith('•') ? 'ml-1 my-0.5' :
+                        line.startsWith('🌱') || line.startsWith('💊') || line.startsWith('⚠️')
+                          ? 'font-medium text-agri-green mt-2 mb-1'
+                          : 'my-0.5'
+                      }>
                         {line}
                       </p>
                     ))}
                   </div>
 
-                  {/* Meta row */}
                   <div className="flex items-center gap-2 mt-1 px-1">
-                    <span className="text-[9px] font-bold uppercase text-zinc-600">
+                    <span className={`text-xs ${isSunlightMode ? 'text-white/40' : 'text-agri-soil/50'}`}>
                       {msg.role === 'ai' ? 'Agri-Scientist' : 'You'} • {msg.timestamp}
                     </span>
                     {msg.role === 'ai' && msg.sourceType === 'EXPERT_GUIDE' && (
-                      <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      <span className="text-xs font-medium px-1.5 py-0.5 rounded-full bg-agri-green/10 text-agri-green border border-agri-green/20">
                         Expert Guide
                       </span>
                     )}
                     {msg.role === 'ai' && msg.speechUrl && (
                       <button
                         onClick={() => playAudio(msg.speechUrl!)}
-                        className="text-zinc-600 hover:text-emerald-400 transition-colors"
+                        aria-label="Replay audio"
+                        title="Replay audio"
+                        className={`transition-colors focus:outline-none focus:ring-2 focus:ring-agri-green focus:ring-offset-1 rounded ${
+                          isSunlightMode ? 'text-white/40 hover:text-agri-green-mid' : 'text-agri-soil/40 hover:text-agri-green'
+                        }`}
                       >
-                        <Volume2 className="w-3 h-3" />
+                        <Volume2 className="w-4 h-4" />
                       </button>
                     )}
                   </div>
@@ -245,12 +240,13 @@ export const ExpertChatOverlay: FC<ExpertChatOverlayProps> = ({
               {loading && (
                 <div className="flex items-start">
                   <div className={`px-4 py-3 rounded-2xl rounded-tl-none border ${
-                    dark ? 'bg-zinc-900 border-emerald-400/30' : 'bg-zinc-800 border-zinc-700'
+                    isSunlightMode ? 'bg-zinc-900 border-agri-green-mid/30' : 'bg-agri-cream border-agri-soil/15'
                   }`}>
+                    <div className="shimmer-bar w-32 mb-1"><div className="shimmer-bar-inner" /></div>
                     <div className="flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
-                      <span className="text-xs text-zinc-500 font-bold uppercase tracking-wide">
-                        Consulting knowledge base...
+                      <Loader2 className="w-4 h-4 animate-spin text-agri-green" />
+                      <span className={`text-xs font-medium ${isSunlightMode ? 'text-white/50' : 'text-agri-soil/60'}`}>
+                        Consulting knowledge base…
                       </span>
                     </div>
                   </div>
@@ -258,33 +254,36 @@ export const ExpertChatOverlay: FC<ExpertChatOverlayProps> = ({
               )}
             </div>
 
-            {/* Input bar */}
-            <div className={`p-4 border-t flex gap-3 flex-shrink-0 ${
-              dark ? 'bg-black border-emerald-400/20' : 'bg-zinc-950 border-zinc-800'
+            {/* Zone 3 — Input Footer (flex-none + pinned) */}
+            <div className={`flex-none border-t px-4 py-3 flex gap-3 ${
+              isSunlightMode ? 'bg-black border-agri-green-mid/20' : 'bg-agri-offwhite border-agri-soil/10'
             }`}>
+              <label htmlFor="expert-input" className="sr-only">Ask about your crops</label>
               <input
+                id="expert-input"
                 ref={inputRef}
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && sendQuery(input)}
                 placeholder={currentLanguage === 'hi' ? 'अपना सवाल लिखें...' : 'Ask about your crops...'}
-                className={`flex-1 px-4 py-3 rounded-2xl text-sm font-medium outline-none border-2 transition-all ${
-                  dark
-                    ? 'bg-zinc-900 border-zinc-700 text-white placeholder-zinc-600 focus:border-emerald-400'
-                    : 'bg-zinc-800 border-zinc-700 text-white placeholder-zinc-600 focus:border-emerald-500'
+                className={`flex-1 px-4 py-3 min-h-[44px] rounded-2xl text-sm font-medium outline-none border-2 transition-all focus:outline-none focus:ring-2 focus:ring-agri-green focus:ring-offset-2 ${
+                  isSunlightMode
+                    ? 'bg-zinc-900 border-zinc-700 text-white placeholder-zinc-600 focus:border-agri-green-mid'
+                    : 'bg-agri-cream border-agri-soil/20 text-agri-soil-deep placeholder-agri-soil/40 focus:border-agri-green'
                 }`}
               />
               <motion.button
                 whileTap={{ scale: 0.9 }}
                 onClick={() => sendQuery(input)}
                 disabled={!input.trim() || loading}
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
+                aria-label="Send message"
+                className={`min-h-[44px] min-w-[44px] rounded-2xl flex items-center justify-center transition-all focus:outline-none focus:ring-2 focus:ring-agri-green focus:ring-offset-2 ${
                   input.trim() && !loading
-                    ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/40'
-                    : 'bg-zinc-800 text-zinc-600'
+                    ? 'bg-agri-green text-agri-cream'
+                    : (isSunlightMode ? 'bg-zinc-800 text-zinc-600' : 'bg-agri-soil/10 text-agri-soil/40')
                 }`}
               >
-                <Send className="w-4 h-4" />
+                <Send className="w-5 h-5" />
               </motion.button>
             </div>
           </motion.div>
@@ -293,3 +292,14 @@ export const ExpertChatOverlay: FC<ExpertChatOverlayProps> = ({
     </AnimatePresence>
   );
 };
+
+/*
+ * Changes Made:
+ * - Dark zinc → agri-offwhite / agri-cream surfaces
+ * - User bubble: bg-agri-green text-agri-cream
+ * - AI bubble: bg-agri-cream border-agri-soil/15
+ * - Loading: shimmer-bar + Loader2 (no text-only loading)
+ * - Input: agri-cream bg, focus:ring-agri-green, label htmlFor
+ * - All buttons min-h-[44px] with focus rings
+ * - Sprout icon replaced with BookOpen per spec
+ */

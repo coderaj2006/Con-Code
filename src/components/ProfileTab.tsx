@@ -1,3 +1,4 @@
+// RESKIN ONLY — Logic untouched. UI layer updated per Agri-Tech spec.
 import { FC, useState } from 'react';
 import { motion } from 'framer-motion';
 import { User, Bell, Sun, Globe, ChevronRight, LogOut, Shield, Smartphone } from 'lucide-react';
@@ -10,6 +11,7 @@ interface ProfileTabProps {
   setIsSunlightMode?: (val: boolean) => void;
 }
 
+/* INJECT LOGIC HERE — DO NOT REMOVE */
 export const ProfileTab: FC<ProfileTabProps> = ({ isSunlightMode, setIsSunlightMode }) => {
   const { currentLanguage, availableLanguages } = useTranslation();
   const { user, logout } = useAuth();
@@ -17,35 +19,45 @@ export const ProfileTab: FC<ProfileTabProps> = ({ isSunlightMode, setIsSunlightM
   const [notificationsOn, setNotificationsOn] = useState(true);
 
   const selectedLang = availableLanguages.find(l => l.code === currentLanguage) || availableLanguages[0];
+  /* END LOGIC */
 
   const Row = ({ icon: Icon, label, value, onClick, toggle, toggleVal }: any) => (
     <motion.button
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
-      className={`w-full flex items-center justify-between px-4 py-4 rounded-2xl border transition-all ${
-        isSunlightMode ? 'bg-white/5 border-white/10 hover:border-white/30' : 'bg-zinc-800/60 border-zinc-700/50 hover:border-zinc-600'
+      aria-label={label}
+      className={`w-full flex items-center justify-between px-4 py-4 min-h-[44px] rounded-2xl border transition-all focus:outline-none focus:ring-2 focus:ring-agri-green focus:ring-offset-2 ${
+        isSunlightMode
+          ? 'bg-white/5 border-white/10 hover:border-white/30 text-white'
+          : 'bg-agri-offwhite border-agri-soil/15 hover:border-agri-soil/30 text-agri-soil-deep'
       }`}
     >
       <div className="flex items-center gap-3">
-        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isSunlightMode ? 'bg-white/10' : 'bg-zinc-700'}`}>
-          <Icon className={`w-4.5 h-4.5 ${isSunlightMode ? 'text-neon-agri' : 'text-emerald-400'}`} />
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${
+          isSunlightMode ? 'bg-white/10' : 'bg-agri-cream'
+        }`}>
+          <Icon className={`w-5 h-5 ${isSunlightMode ? 'text-[#39FF14]' : 'text-agri-green'}`} />
         </div>
-        <span className={`text-sm font-black uppercase tracking-wide ${isSunlightMode ? 'text-white' : 'text-white'}`}>{label}</span>
+        <span className={`text-base font-medium ${isSunlightMode ? 'text-white' : 'text-agri-soil-deep'}`}>{label}</span>
       </div>
       {toggle !== undefined ? (
         <div
+          role="switch"
+          aria-checked={toggleVal}
           onClick={e => { e.stopPropagation(); onClick?.(); }}
-          className={`w-11 h-6 rounded-full transition-all relative ${toggleVal ? 'bg-emerald-500' : (isSunlightMode ? 'bg-white/20' : 'bg-zinc-600')}`}
+          className={`w-11 h-6 rounded-full transition-all relative cursor-pointer ${
+            toggleVal ? 'bg-agri-green' : (isSunlightMode ? 'bg-white/20' : 'bg-agri-soil/20')
+          }`}
         >
           <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all ${toggleVal ? 'left-5' : 'left-0.5'}`} />
         </div>
       ) : value ? (
         <div className="flex items-center gap-2">
-          <span className={`text-xs font-bold uppercase ${isSunlightMode ? 'text-white/50' : 'text-zinc-500'}`}>{value}</span>
-          <ChevronRight className="w-4 h-4 text-zinc-600" />
+          <span className={`text-sm font-medium ${isSunlightMode ? 'text-white/50' : 'text-agri-soil/60'}`}>{value}</span>
+          <ChevronRight className={`w-5 h-5 ${isSunlightMode ? 'text-white/30' : 'text-agri-soil/40'}`} />
         </div>
       ) : (
-        <ChevronRight className="w-4 h-4 text-zinc-600" />
+        <ChevronRight className={`w-5 h-5 ${isSunlightMode ? 'text-white/30' : 'text-agri-soil/40'}`} />
       )}
     </motion.button>
   );
@@ -55,21 +67,23 @@ export const ProfileTab: FC<ProfileTabProps> = ({ isSunlightMode, setIsSunlightM
       {/* Avatar */}
       <div className="flex flex-col items-center py-4">
         <div className={`w-20 h-20 rounded-[2rem] flex items-center justify-center mb-3 border-4 ${
-          isSunlightMode ? 'bg-white border-neon-agri' : 'bg-yellow-400 border-white/20'
+          isSunlightMode ? 'bg-white border-[#39FF14]' : 'bg-agri-green border-agri-green-mid'
         }`}>
-          <User className={`w-10 h-10 ${isSunlightMode ? 'text-black' : 'text-emerald-900'}`} />
+          <User className={`w-10 h-10 ${isSunlightMode ? 'text-black' : 'text-agri-cream'}`} />
         </div>
-        <p className={`font-black text-lg uppercase tracking-widest ${isSunlightMode ? 'text-neon-agri' : 'text-white'}`}>
+        <p className={`text-xl font-semibold tracking-tight ${isSunlightMode ? 'text-white' : 'text-agri-soil-deep'}`}>
           {user?.name || 'Farmer'}
         </p>
-        <p className="text-xs font-bold uppercase text-zinc-500">{user?.crop || 'Kisaan AI Member'}</p>
+        <p className={`text-sm font-medium ${isSunlightMode ? 'text-white/50' : 'text-agri-soil/60'}`}>
+          {user?.crop || 'Kisaan AI Member'}
+        </p>
       </div>
 
       {/* Settings */}
       <div className="space-y-2">
-        <p className={`text-[10px] font-black uppercase tracking-widest px-1 mb-2 ${isSunlightMode ? 'text-white/40' : 'text-zinc-600'}`}>
-          Preferences
-        </p>
+        <p className={`text-xs font-medium uppercase tracking-widest px-1 mb-2 ${
+          isSunlightMode ? 'text-white/40' : 'text-agri-soil/50'
+        }`}>Preferences</p>
         <Row
           icon={Globe}
           label="Language"
@@ -93,9 +107,9 @@ export const ProfileTab: FC<ProfileTabProps> = ({ isSunlightMode, setIsSunlightM
       </div>
 
       <div className="space-y-2">
-        <p className={`text-[10px] font-black uppercase tracking-widest px-1 mb-2 ${isSunlightMode ? 'text-white/40' : 'text-zinc-600'}`}>
-          App Info
-        </p>
+        <p className={`text-xs font-medium uppercase tracking-widest px-1 mb-2 ${
+          isSunlightMode ? 'text-white/40' : 'text-agri-soil/50'
+        }`}>App Info</p>
         <Row icon={Smartphone} label="Version" value="1.0.0" onClick={() => {}} />
         <Row icon={Shield}     label="Privacy Policy"  onClick={() => {}} />
       </div>
@@ -103,11 +117,14 @@ export const ProfileTab: FC<ProfileTabProps> = ({ isSunlightMode, setIsSunlightM
       <motion.button
         whileTap={{ scale: 0.97 }}
         onClick={logout}
-        className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-sm flex items-center justify-center gap-2 border-2 ${
-          isSunlightMode ? 'border-white text-white hover:bg-white/10' : 'border-red-500/30 text-red-400 hover:bg-red-500/10'
+        aria-label="Sign out"
+        className={`w-full min-h-[44px] py-3 rounded-2xl text-base font-medium flex items-center justify-center gap-2 border-2 transition-all focus:outline-none focus:ring-2 focus:ring-agri-terra focus:ring-offset-2 ${
+          isSunlightMode
+            ? 'border-white text-white hover:bg-white/10'
+            : 'border-agri-terra/30 text-agri-terra hover:bg-agri-terra/5'
         }`}
       >
-        <LogOut className="w-4 h-4" />
+        <LogOut className="w-5 h-5" />
         Sign Out
       </motion.button>
 
@@ -115,3 +132,12 @@ export const ProfileTab: FC<ProfileTabProps> = ({ isSunlightMode, setIsSunlightM
     </div>
   );
 };
+
+/*
+ * Changes Made:
+ * - Dark zinc → agri-offwhite / agri-cream surfaces
+ * - Avatar bg-agri-green border-agri-green-mid
+ * - Row items: text-base font-medium, min-h-[44px], focus rings
+ * - Toggle: bg-agri-green when on, role="switch" aria-checked
+ * - Sign out: agri-terra border, focus:ring-agri-terra
+ */

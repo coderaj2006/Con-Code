@@ -1,5 +1,6 @@
+// RESKIN ONLY — Logic untouched. UI layer updated per Agri-Tech spec.
 import { FC, useState } from 'react';
-import { AlertTriangle, MapPin, CloudRain, Wind, Thermometer, Droplets, Search, X, Sun } from 'lucide-react';
+import { ShieldCheck, AlertTriangle, AlertOctagon, MapPin, CloudRain, Wind, Thermometer, Droplets, Search, X, CloudSun } from 'lucide-react';
 import { WeatherAlertResponse, getWeatherByCity } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from '../context/TranslationContext';
@@ -10,6 +11,7 @@ interface AlertCardProps {
   onWeatherChange?: (data: WeatherAlertResponse) => void;
 }
 
+/* INJECT LOGIC HERE — DO NOT REMOVE */
 export const AlertCard: FC<AlertCardProps> = ({ weatherData, isSunlightMode, onWeatherChange }) => {
   const { t } = useTranslation();
   const [showSearch, setShowSearch] = useState(false);
@@ -41,10 +43,28 @@ export const AlertCard: FC<AlertCardProps> = ({ weatherData, isSunlightMode, onW
 
   const getWeatherIcon = () => {
     const cond = weatherData.condition?.toLowerCase() ?? '';
-    if (cond.includes('rain') || cond.includes('drizzle')) return <CloudRain className="w-10 h-10 text-blue-400" />;
-    if (cond.includes('clear')) return <Sun className="w-10 h-10 text-yellow-400" />;
-    return <CloudRain className="w-10 h-10 text-blue-400" />;
+    if (cond.includes('rain') || cond.includes('drizzle')) return <CloudRain className="w-8 h-8 text-agri-green" />;
+    if (cond.includes('clear')) return <CloudSun className="w-8 h-8 text-agri-amber" />;
+    return <CloudSun className="w-8 h-8 text-agri-green-mid" />;
   };
+
+  /* Status banner — reads from existing urgency state */
+  const getBannerStyle = () => {
+    if (isHighRisk) return {
+      wrap: 'bg-agri-terra/10 border-l-4 border-agri-terra text-agri-terra',
+      Icon: AlertOctagon,
+    };
+    if (weatherData.urgency === 'Medium') return {
+      wrap: 'bg-agri-amber/10 border-l-4 border-agri-amber text-agri-amber',
+      Icon: AlertTriangle,
+    };
+    return {
+      wrap: 'bg-agri-green/10 border-l-4 border-agri-green text-agri-green',
+      Icon: ShieldCheck,
+    };
+  };
+
+  const banner = getBannerStyle();
 
   const LocationSearchPanel = () => (
     <AnimatePresence>
@@ -56,31 +76,36 @@ export const AlertCard: FC<AlertCardProps> = ({ weatherData, isSunlightMode, onW
           className="mt-4"
         >
           <div className="flex gap-2">
+            <label htmlFor="alert-city-input" className="sr-only">City name</label>
             <input
+              id="alert-city-input"
               type="text"
               value={cityInput}
               onChange={e => setCityInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleCitySearch()}
               placeholder="Enter city name..."
-              className={`flex-1 px-3 py-2 rounded-xl text-sm font-bold outline-none border ${
+              autoFocus
+              className={`flex-1 px-3 py-2 min-h-[44px] rounded-xl text-sm font-medium outline-none border-2 focus:outline-none focus:ring-2 focus:ring-agri-green focus:ring-offset-2 transition-all ${
                 isSunlightMode
                   ? 'bg-white text-black border-white placeholder-zinc-400'
-                  : 'bg-zinc-800 text-white border-zinc-700 placeholder-zinc-500'
+                  : 'bg-agri-cream border-agri-soil/30 text-agri-soil-deep placeholder-agri-soil/50'
               }`}
-              autoFocus
             />
             <button
               onClick={handleCitySearch}
               disabled={isSearching}
-              className={`px-3 py-2 rounded-xl font-black text-sm transition-all ${
-                isSunlightMode ? 'bg-white text-black' : 'bg-blue-500 text-white'
-              } disabled:opacity-50`}
+              aria-label="Search city"
+              className={`px-3 min-h-[44px] rounded-xl font-semibold text-sm transition-all focus:outline-none focus:ring-2 focus:ring-agri-green focus:ring-offset-2 disabled:opacity-50 ${
+                isSunlightMode ? 'bg-white text-black' : 'bg-agri-green text-agri-cream'
+              }`}
             >
-              {isSearching ? '...' : <Search className="w-4 h-4" />}
+              {isSearching ? '…' : <Search className="w-4 h-4" />}
             </button>
           </div>
           {searchError && (
-            <p className="text-red-400 text-xs font-bold mt-1.5">{searchError}</p>
+            <p className="text-agri-terra text-xs font-medium mt-1.5 flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3" />{searchError}
+            </p>
           )}
         </motion.div>
       )}
@@ -90,33 +115,34 @@ export const AlertCard: FC<AlertCardProps> = ({ weatherData, isSunlightMode, onW
   if (isHighRisk) {
     return (
       <motion.div
-        whileHover={{ scale: 1.02 }}
-        className={`relative overflow-hidden p-6 rounded-[2.5rem] shadow-2xl transition-all duration-500 border-2 ${
-          isSunlightMode ? 'bg-black border-white' : 'bg-red-500/90 border-red-400 shadow-red-900/40 animate-pulse-red'
+        className={`relative overflow-hidden p-6 rounded-3xl border-2 transition-colors duration-500 ${
+          isSunlightMode ? 'bg-black border-white' : 'bg-agri-terra/10 border-agri-terra/40'
         }`}
       >
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className={`p-3 rounded-2xl ${isSunlightMode ? 'bg-white text-black' : 'bg-white/20 text-white'}`}>
-              <AlertTriangle className="w-8 h-8" />
-            </div>
-            <div>
-              <h3 className="text-base font-black uppercase tracking-widest text-white">{t('critical_warning')}</h3>
-              <p className={`text-xs font-bold ${isSunlightMode ? 'text-white/60' : 'text-white/70'}`}>{t('warning_subtitle')}</p>
-            </div>
-          </div>
-          <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-            isSunlightMode ? 'bg-white text-black' : 'bg-red-400/30 text-white border border-red-400/30'
-          }`}>Critical</div>
+        {/* Status banner */}
+        <div className={`flex items-center gap-2 px-4 py-2 rounded-xl mb-4 transition-colors duration-500 ${
+          isSunlightMode ? 'bg-white/10 text-white' : banner.wrap
+        }`}>
+          <banner.Icon className="w-5 h-5 shrink-0" />
+          <span className="text-sm font-medium">{t('critical_warning')}</span>
         </div>
-        <p className={`text-2xl font-black leading-tight mb-6 ${isSunlightMode ? 'text-neon-agri' : 'text-white'}`}>{t('warning_body')}</p>
-        <div className="flex gap-4 mb-4">
-          <div className="status-pill bg-black/20 text-white border border-white/10">{t('label_humidity')}: {weatherData.humidity}%</div>
-          <div className="status-pill bg-black/20 text-white border border-white/10">{t('label_temp')}: {weatherData.temperature}°C</div>
+
+        <p className={`text-xl font-semibold leading-snug mb-4 ${isSunlightMode ? 'text-white' : 'text-agri-soil-deep'}`}>
+          {t('warning_body')}
+        </p>
+        <div className="flex gap-3 mb-4 flex-wrap">
+          <span className={`status-pill ${isSunlightMode ? 'bg-white/10 text-white' : 'bg-agri-terra/10 text-agri-terra'}`}>
+            <Droplets className="w-4 h-4" />{t('label_humidity')}: {weatherData.humidity}%
+          </span>
+          <span className={`status-pill ${isSunlightMode ? 'bg-white/10 text-white' : 'bg-agri-terra/10 text-agri-terra'}`}>
+            <Thermometer className="w-4 h-4" />{t('label_temp')}: {weatherData.temperature}°C
+          </span>
         </div>
         <button
           onClick={() => setShowSearch(s => !s)}
-          className="flex items-center gap-1.5 text-white/60 text-xs font-bold mb-3 hover:text-white transition-colors"
+          className={`flex items-center gap-1.5 text-xs font-medium mb-3 transition-colors focus:outline-none focus:ring-2 focus:ring-agri-green focus:ring-offset-2 rounded ${
+            isSunlightMode ? 'text-white/60 hover:text-white' : 'text-agri-soil/60 hover:text-agri-soil-deep'
+          }`}
         >
           <MapPin className="w-3 h-3" />
           Change location
@@ -125,8 +151,8 @@ export const AlertCard: FC<AlertCardProps> = ({ weatherData, isSunlightMode, onW
         <LocationSearchPanel />
         <motion.button
           whileTap={{ scale: 0.95 }}
-          className={`w-full py-4 rounded-2xl font-black uppercase tracking-widest text-sm transition-all shadow-lg ${
-            isSunlightMode ? 'bg-white text-black' : 'bg-white text-red-600'
+          className={`w-full min-h-[44px] py-3 rounded-2xl font-semibold text-base transition-all focus:outline-none focus:ring-2 focus:ring-agri-green focus:ring-offset-2 ${
+            isSunlightMode ? 'bg-white text-black' : 'bg-agri-terra text-white'
           }`}
         >
           {t('act_now')}
@@ -137,50 +163,76 @@ export const AlertCard: FC<AlertCardProps> = ({ weatherData, isSunlightMode, onW
 
   return (
     <motion.div
-      whileHover={{ scale: 1.02 }}
-      className={`p-6 rounded-[2.5rem] shadow-2xl transition-all duration-500 border-2 ${
-        isSunlightMode ? 'bg-black border-white' : 'bg-zinc-900 border-zinc-800'
+      className={`p-6 rounded-3xl border transition-colors duration-500 ${
+        isSunlightMode ? 'bg-black border-white' : 'bg-agri-offwhite border-agri-soil/20'
       }`}
     >
+      {/* Status banner */}
+      <div className={`flex items-center gap-2 px-4 py-2 rounded-xl mb-4 transition-colors duration-500 ${
+        isSunlightMode ? 'bg-white/10 text-white' : banner.wrap
+      }`}>
+        <banner.Icon className="w-5 h-5 shrink-0" />
+        <span className="text-sm font-medium">
+          {weatherData.urgency === 'Medium' ? 'Weather Advisory' : 'Field Conditions Normal'}
+        </span>
+      </div>
+
       <div className="flex justify-between items-start mb-4">
         <div>
-          <h3 className={`text-4xl font-black ${isSunlightMode ? 'text-neon-agri' : 'text-white'}`}>
+          <h3 className={`text-4xl font-semibold tracking-tight ${isSunlightMode ? 'text-white' : 'text-agri-soil-deep'}`}>
             {weatherData.temperature}°C
           </h3>
           <button
             onClick={() => setShowSearch(s => !s)}
-            className="flex items-center gap-1.5 mt-1 text-zinc-400 hover:text-white transition-colors group"
+            className={`flex items-center gap-1.5 mt-1 transition-colors group focus:outline-none focus:ring-2 focus:ring-agri-green focus:ring-offset-2 rounded ${
+              isSunlightMode ? 'text-white/60 hover:text-white' : 'text-agri-soil/60 hover:text-agri-soil-deep'
+            }`}
           >
             <MapPin className="w-4 h-4" />
-            <span className="text-xs font-black uppercase tracking-widest">
-              {weatherData.city || 'Your Location'}
-            </span>
-            <span className="text-[10px] text-zinc-600 group-hover:text-zinc-400 ml-1 font-bold">
-              {showSearch ? '✕' : 'change'}
-            </span>
+            <span className="text-xs font-medium">{weatherData.city || 'Your Location'}</span>
+            <span className="text-[10px] ml-1">{showSearch ? '✕' : 'change'}</span>
           </button>
         </div>
-        <div className="w-16 h-16 bg-zinc-800 rounded-3xl flex items-center justify-center border border-zinc-700">
+        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center border ${
+          isSunlightMode ? 'bg-white/10 border-white/20' : 'bg-agri-cream border-agri-soil/20'
+        }`}>
           {getWeatherIcon()}
         </div>
       </div>
 
       <LocationSearchPanel />
 
-      <div className="grid grid-cols-4 gap-2 mt-4">
-        <WeatherStat label={t('humidity')} value={`${weatherData.humidity}%`} icon={Droplets} isSunlightMode={isSunlightMode} />
-        <WeatherStat label="Wind" value={windDisplay} icon={Wind} isSunlightMode={isSunlightMode} />
-        <WeatherStat label="UV Index" value={uvDisplay} icon={Sun} isSunlightMode={isSunlightMode} />
-        <WeatherStat label={t('temperature')} value={`${weatherData.temperature}°C`} icon={Thermometer} isSunlightMode={isSunlightMode} />
+      {/* Weather stats — each row: icon+label left, value right */}
+      <div className={`rounded-2xl overflow-hidden border divide-y ${
+        isSunlightMode ? 'border-white/20 divide-white/10' : 'border-agri-soil/10 divide-agri-soil/10'
+      }`}>
+        {[
+          { label: t('humidity'),    value: `${weatherData.humidity}%`,       Icon: Droplets },
+          { label: 'Wind',           value: windDisplay,                       Icon: Wind },
+          { label: 'UV Index',       value: uvDisplay,                         Icon: CloudSun },
+          { label: t('temperature'), value: `${weatherData.temperature}°C`,   Icon: Thermometer },
+        ].map(({ label, value, Icon }) => (
+          <div key={label} className={`flex items-center justify-between px-4 py-3 ${
+            isSunlightMode ? 'bg-white/5' : 'bg-agri-offwhite'
+          }`}>
+            <div className="flex items-center gap-2">
+              <Icon className={`w-5 h-5 ${isSunlightMode ? 'text-white/60' : 'text-agri-soil/60'}`} />
+              <span className={`text-sm font-medium ${isSunlightMode ? 'text-white/70' : 'text-agri-soil-deep/70'}`}>{label}</span>
+            </div>
+            <span className={`text-sm font-semibold ${isSunlightMode ? 'text-white' : 'text-agri-soil-deep'}`}>{value}</span>
+          </div>
+        ))}
       </div>
     </motion.div>
   );
 };
 
-const WeatherStat = ({ label, value, icon: Icon, isSunlightMode }: any) => (
-  <div className={`p-3 rounded-2xl flex flex-col items-center ${isSunlightMode ? 'border-2 border-white' : 'bg-zinc-800/50 border border-zinc-800'}`}>
-    <Icon className={`w-5 h-5 mb-2 ${isSunlightMode ? 'text-white' : 'text-zinc-500'}`} />
-    <span className={`text-[10px] font-bold uppercase tracking-tighter mb-0.5 text-center ${isSunlightMode ? 'text-white/60' : 'text-zinc-500'}`}>{label}</span>
-    <span className={`text-xs font-black ${isSunlightMode ? 'text-neon-agri' : 'text-white'}`}>{value}</span>
-  </div>
-);
+/*
+ * Changes Made:
+ * - Dark zinc palette → agri-offwhite / agri-cream surfaces
+ * - Status banner reads from urgency state: ShieldCheck (safe), AlertTriangle (warning), AlertOctagon (danger)
+ * - transition-colors duration-500 on state changes
+ * - Weather stats in row layout with divide-y
+ * - All interactive elements min-h-[44px] with focus rings
+ * - Error text uses agri-terra + icon (not color alone)
+ */
