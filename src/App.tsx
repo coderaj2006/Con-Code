@@ -22,6 +22,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthScreen } from './components/AuthScreen';
 import { LocationProvider, useLocation } from './context/LocationContext';
 import { SchemeMitra } from './components/SchemeMitra';
+import { API_BASE } from './config';
 
 export interface ChatMessage {
   role: 'user' | 'ai';
@@ -63,7 +64,6 @@ function AppContent() {
 
   // --- Backend Handshake + Telemetry Pre-warming ---
   useEffect(() => {
-    const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:8002';
     fetch(`${API_BASE}/telemetry?farmer_id=1`)
       .then(res => {
         if (res.ok) {
@@ -85,7 +85,8 @@ function AppContent() {
         }
       })
       .catch(() => {
-        console.warn('⚠️ Kisaan-Sense: Backend not reachable on Port 8001. Is uvicorn running?');
+        console.warn('⚠️ Kisaan-Sense: Backend not reachable on Port 8002. Is uvicorn running?');
+
         setIsSimulationMode(true);
       });
   }, []);

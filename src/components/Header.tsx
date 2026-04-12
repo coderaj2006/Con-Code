@@ -4,8 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { LanguageBottomSheet } from './LanguageBottomSheet';
 import { useTranslation } from '../context/TranslationContext';
 import { useLocation } from '../context/LocationContext';
+import { API_BASE as API_BASE_URL } from '../config';
 
-const API_BASE_URL = (import.meta as any).env.VITE_API_URL || 'http://127.0.0.1:8002';
 
 interface HeaderProps {
   isSunlightMode: boolean;
@@ -39,10 +39,6 @@ export const Header: FC<HeaderProps> = ({ isSunlightMode, setIsSunlightMode }) =
       const res = await fetch(`${API_BASE_URL}/weather-by-city?city=${encodeURIComponent(cityInput.trim())}`);
       if (!res.ok) throw new Error('not found');
       const data = await res.json();
-      // Use the city coords from OWM response — we need lat/lon, so call geocoding
-      const geoRes = await fetch(
-        `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(cityInput.trim())}&limit=1&appid=`
-      );
       // Fallback: store city name only, lat/lon from weather-by-city isn't returned
       // So we call our own backend endpoint that returns weather; store city name + trigger re-fetch via context
       setManualCity(data.city || cityInput.trim(), coords.lat, coords.lon);

@@ -1,6 +1,7 @@
 import { FC, useEffect, useState } from 'react';
 import { TrendingUp, TrendingDown, Minus, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { API_BASE } from '../config';
 
 interface MandiPrice {
   crop: string;
@@ -14,7 +15,7 @@ interface MandiPricesProps {
   isSunlightMode?: boolean;
 }
 
-const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:8002';
+
 
 export const MandiPrices: FC<MandiPricesProps> = ({ isSunlightMode }) => {
   const [prices, setPrices] = useState<MandiPrice[]>([]);

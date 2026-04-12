@@ -3,8 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Send, TrendingUp, Loader2, ShoppingCart } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from '../context/TranslationContext';
+import { API_BASE } from '../config';
 
-const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:8002';
 
 interface MandiMessage {
   role: 'user' | 'ai';
