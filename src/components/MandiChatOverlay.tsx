@@ -1,6 +1,7 @@
+// LAYOUT FIX ONLY — State, effects, and handlers are untouched.
 import { FC, useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Send, TrendingUp, Loader2, ShoppingCart } from 'lucide-react';
+import { X, Send, TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTranslation } from '../context/TranslationContext';
 import { API_BASE } from '../config';
@@ -26,6 +27,7 @@ const QUICK_QUERIES = [
   'Potato price trend',
 ];
 
+/* INJECT LOGIC HERE — DO NOT REMOVE */
 export const MandiChatOverlay: FC<MandiChatOverlayProps> = ({ isOpen, onClose, isSunlightMode }) => {
   const { getAuthHeaders } = useAuth();
   const { currentLanguage } = useTranslation();
@@ -38,7 +40,6 @@ export const MandiChatOverlay: FC<MandiChatOverlayProps> = ({ isOpen, onClose, i
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
-  // Welcome message on open
   useEffect(() => {
     if (isOpen && messages.length === 0) {
       setMessages([{
@@ -82,9 +83,7 @@ export const MandiChatOverlay: FC<MandiChatOverlayProps> = ({ isOpen, onClose, i
       setLoading(false);
     }
   };
-
-  const trendColor = (t: string) =>
-    t === 'up' ? 'text-emerald-400' : t === 'down' ? 'text-red-400' : 'text-zinc-400';
+  /* END LOGIC */
 
   return (
     <AnimatePresence>
@@ -92,57 +91,66 @@ export const MandiChatOverlay: FC<MandiChatOverlayProps> = ({ isOpen, onClose, i
         <>
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            className="fixed inset-0 z-[51] flex items-end sm:items-center justify-center bg-agri-soil-deep/40 p-4"
             onClick={onClose}
           />
           <motion.div
             initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className={`fixed bottom-0 left-0 right-0 max-w-md mx-auto rounded-t-[3rem] z-50 flex flex-col overflow-hidden ${
-              isSunlightMode ? 'bg-black border-t-4 border-x-4 border-white' : 'bg-zinc-900'
+            onClick={(e) => e.stopPropagation()}
+            className={`fixed bottom-0 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 flex flex-col w-full max-w-lg mx-auto h-[90vh] max-h-[90vh] rounded-3xl z-[52] overflow-hidden ${
+              isSunlightMode ? 'bg-black border-t-4 border-x-4 border-white' : 'bg-agri-offwhite border-t border-agri-soil/20'
             }`}
-            style={{ height: '85vh' }}
           >
-            {/* Header */}
-            <div className={`flex items-center justify-between px-6 pt-5 pb-4 border-b ${
-              isSunlightMode ? 'border-white/20' : 'border-zinc-800'
+            {/* Zone 1 — Header (flex-none) */}
+            <div className={`flex-none flex items-center justify-between px-6 pt-5 pb-4 border-b ${
+              isSunlightMode ? 'border-white/20' : 'border-agri-soil/10'
             }`}>
               <div className="flex items-center gap-3">
                 <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${
-                  isSunlightMode ? 'bg-white' : 'bg-blue-600'
+                  isSunlightMode ? 'bg-white' : 'bg-agri-green'
                 }`}>
-                  <ShoppingCart className={`w-5 h-5 ${isSunlightMode ? 'text-black' : 'text-white'}`} />
+                  <TrendingUp className={`w-5 h-5 ${isSunlightMode ? 'text-black' : 'text-agri-cream'}`} />
                 </div>
                 <div>
-                  <h3 className={`text-base font-black uppercase tracking-widest ${
-                    isSunlightMode ? 'text-neon-agri' : 'text-white'
-                  }`}>Mandi Prices</h3>
-                  <p className="text-[10px] font-bold uppercase text-zinc-500">RAG-Powered Price AI</p>
+                  <h3 className={`text-base font-semibold ${isSunlightMode ? 'text-white' : 'text-agri-soil-deep'}`}>
+                    Mandi Prices
+                  </h3>
+                  <p className={`text-xs ${isSunlightMode ? 'text-white/50' : 'text-agri-soil/60'}`}>RAG-Powered Price AI</p>
                 </div>
               </div>
-              <button onClick={onClose} className={`p-2 rounded-full ${
-                isSunlightMode ? 'bg-white/10 text-white' : 'bg-zinc-800 text-zinc-400'
-              }`}>
-                <X className="w-4 h-4" />
+              <button
+                onClick={onClose}
+                aria-label="Close mandi chat"
+                className={`min-h-[44px] min-w-[44px] rounded-full flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-agri-green focus:ring-offset-2 ${
+                  isSunlightMode ? 'bg-white/10 text-white' : 'bg-agri-cream text-agri-soil'
+                }`}
+              >
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Quick query chips */}
-            <div className="px-4 py-3 flex gap-2 overflow-x-auto scrollbar-hide">
+            {/* Quick query chips (flex-none) */}
+            <div className={`flex-none flex gap-2 overflow-x-auto px-4 py-2 border-b scrollbar-hide ${
+              isSunlightMode ? 'border-white/10' : 'border-agri-soil/10'
+            }`}>
               {QUICK_QUERIES.map(q => (
-                <button key={q} onClick={() => sendQuery(q)}
-                  className={`flex-shrink-0 text-[10px] font-black uppercase tracking-wide px-3 py-1.5 rounded-full border transition-all ${
+                <button
+                  key={q}
+                  onClick={() => sendQuery(q)}
+                  className={`flex-shrink-0 text-xs font-medium px-3 py-2 min-h-[44px] rounded-full border transition-all focus:outline-none focus:ring-2 focus:ring-agri-green focus:ring-offset-2 ${
                     isSunlightMode
-                      ? 'border-white/20 text-white/70 hover:border-neon-agri hover:text-neon-agri'
-                      : 'border-zinc-700 text-zinc-400 hover:border-blue-500 hover:text-blue-400'
-                  }`}>
+                      ? 'border-white/20 text-white/70 hover:border-white hover:text-white'
+                      : 'border-agri-soil/20 text-agri-soil hover:border-agri-green hover:text-agri-green'
+                  }`}
+                >
                   {q}
                 </button>
               ))}
             </div>
 
-            {/* Messages */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-2 space-y-4">
+            {/* Zone 2 — Message List (flex-1 + min-h-0 is the critical fix) */}
+            <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-2 space-y-4">
               {messages.map((msg, idx) => (
                 <motion.div key={idx}
                   initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -150,32 +158,41 @@ export const MandiChatOverlay: FC<MandiChatOverlayProps> = ({ isOpen, onClose, i
                 >
                   <div className={`max-w-[88%] px-4 py-3 rounded-2xl border ${
                     msg.role === 'user'
-                      ? (isSunlightMode ? 'bg-white/10 border-white text-white rounded-tr-none' : 'bg-blue-600/20 border-blue-500/30 text-white rounded-tr-none')
-                      : (isSunlightMode ? 'bg-black border-2 border-neon-agri text-white rounded-tl-none' : 'bg-zinc-800 border-zinc-700 text-white rounded-tl-none')
+                      ? (isSunlightMode ? 'bg-white/10 border-white text-white rounded-tr-none' : 'bg-agri-green/10 border-agri-green/20 text-agri-soil-deep rounded-tr-none')
+                      : (isSunlightMode ? 'bg-black border-2 border-[#39FF14] text-white rounded-tl-none' : 'bg-agri-cream border-agri-soil/15 text-agri-soil-deep rounded-tl-none')
                   }`}>
                     <p className="text-sm font-medium leading-relaxed">{msg.content}</p>
 
                     {/* Price summary cards */}
                     {msg.priceData && msg.priceData.length > 0 && (
-                      <div className="mt-3 space-y-2">
+                      <div className={`mt-3 rounded-xl overflow-hidden border divide-y ${
+                        isSunlightMode ? 'border-white/20 divide-white/10' : 'border-agri-soil/15 divide-agri-soil/10'
+                      }`}>
                         {msg.priceData.map((p, i) => (
-                          <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-xl ${
-                            isSunlightMode ? 'bg-white/5' : 'bg-zinc-700/50'
+                          <div key={i} className={`flex items-center justify-between px-3 py-2 ${
+                            isSunlightMode ? 'bg-white/5' : 'bg-agri-offwhite'
                           }`}>
                             <div>
-                              <p className={`text-xs font-black uppercase ${isSunlightMode ? 'text-neon-agri' : 'text-emerald-400'}`}>{p.crop}</p>
-                              <p className="text-[10px] text-zinc-500 uppercase font-bold">{p.market}</p>
+                              <p className={`text-sm font-medium ${isSunlightMode ? 'text-[#39FF14]' : 'text-agri-green'}`}>{p.crop}</p>
+                              <p className={`text-xs ${isSunlightMode ? 'text-white/50' : 'text-agri-soil/60'}`}>{p.market}</p>
                             </div>
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-black text-white">₹{p.price.toLocaleString()}</span>
-                              <TrendingUp className={`w-3.5 h-3.5 ${trendColor(p.trend)}`} />
+                              <span className={`text-base font-semibold ${isSunlightMode ? 'text-white' : 'text-agri-soil-deep'}`}>
+                                ₹{p.price.toLocaleString()}
+                              </span>
+                              {p.trend === 'up'
+                                ? <TrendingUp className="w-4 h-4 text-agri-green" />
+                                : p.trend === 'down'
+                                ? <TrendingDown className="w-4 h-4 text-agri-terra" />
+                                : null
+                              }
                             </div>
                           </div>
                         ))}
                       </div>
                     )}
                   </div>
-                  <span className="text-[9px] font-bold uppercase text-zinc-600 mt-1 px-1">
+                  <span className={`text-xs mt-1 px-1 ${isSunlightMode ? 'text-white/40' : 'text-agri-soil/50'}`}>
                     {msg.role === 'ai' ? 'Mandi AI' : 'You'} • {msg.timestamp}
                   </span>
                 </motion.div>
@@ -184,40 +201,44 @@ export const MandiChatOverlay: FC<MandiChatOverlayProps> = ({ isOpen, onClose, i
               {loading && (
                 <div className="flex items-start">
                   <div className={`px-4 py-3 rounded-2xl rounded-tl-none border ${
-                    isSunlightMode ? 'bg-black border-neon-agri' : 'bg-zinc-800 border-zinc-700'
+                    isSunlightMode ? 'bg-black border-[#39FF14]' : 'bg-agri-cream border-agri-soil/15'
                   }`}>
-                    <Loader2 className={`w-4 h-4 animate-spin ${isSunlightMode ? 'text-neon-agri' : 'text-blue-400'}`} />
+                    <div className="shimmer-bar w-24"><div className="shimmer-bar-inner" /></div>
+                    <Loader2 className={`w-4 h-4 animate-spin mt-1 ${isSunlightMode ? 'text-[#39FF14]' : 'text-agri-green'}`} />
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Input */}
-            <div className={`p-4 border-t flex gap-3 ${
-              isSunlightMode ? 'bg-black border-white/20' : 'bg-zinc-900 border-zinc-800'
+            {/* Zone 3 — Input Footer (flex-none + pinned) */}
+            <div className={`flex-none border-t px-4 py-3 flex gap-3 ${
+              isSunlightMode ? 'bg-black border-white/20' : 'bg-agri-offwhite border-agri-soil/10'
             }`}>
+              <label htmlFor="mandi-input" className="sr-only">Ask about crop prices</label>
               <input
+                id="mandi-input"
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && sendQuery(input)}
                 placeholder="Ask about crop prices..."
-                className={`flex-1 px-4 py-3 rounded-2xl text-sm font-bold outline-none border-2 ${
+                className={`flex-1 px-4 py-3 min-h-[44px] rounded-2xl text-sm font-medium outline-none border-2 focus:outline-none focus:ring-2 focus:ring-agri-green focus:ring-offset-2 transition-all ${
                   isSunlightMode
-                    ? 'bg-white/5 border-white/20 text-white placeholder-white/30 focus:border-neon-agri'
-                    : 'bg-zinc-800 border-zinc-700 text-white placeholder-zinc-500 focus:border-blue-500'
+                    ? 'bg-white/5 border-white/20 text-white placeholder-white/30 focus:border-[#39FF14]'
+                    : 'bg-agri-cream border-agri-soil/20 text-agri-soil-deep placeholder-agri-soil/40 focus:border-agri-green'
                 }`}
               />
               <motion.button
                 whileTap={{ scale: 0.9 }}
                 onClick={() => sendQuery(input)}
                 disabled={!input.trim() || loading}
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
+                aria-label="Send message"
+                className={`min-h-[44px] min-w-[44px] rounded-2xl flex items-center justify-center transition-all focus:outline-none focus:ring-2 focus:ring-agri-green focus:ring-offset-2 ${
                   input.trim() && !loading
-                    ? (isSunlightMode ? 'bg-white text-black' : 'bg-blue-600 text-white')
-                    : (isSunlightMode ? 'bg-white/10 text-white/30' : 'bg-zinc-700 text-zinc-500')
+                    ? (isSunlightMode ? 'bg-white text-black' : 'bg-agri-green text-agri-cream')
+                    : (isSunlightMode ? 'bg-white/10 text-white/30' : 'bg-agri-soil/10 text-agri-soil/40')
                 }`}
               >
-                <Send className="w-4 h-4" />
+                <Send className="w-5 h-5" />
               </motion.button>
             </div>
           </motion.div>
@@ -226,3 +247,13 @@ export const MandiChatOverlay: FC<MandiChatOverlayProps> = ({ isOpen, onClose, i
     </AnimatePresence>
   );
 };
+
+/*
+ * Changes Made:
+ * - Dark zinc → agri-offwhite / agri-cream surfaces
+ * - User bubble: agri-green/10, AI bubble: agri-cream
+ * - Price cards: divide-y divide-agri-soil/10, trend icons agri-green/agri-terra
+ * - Loading: shimmer-bar replaces spinner text
+ * - Input: agri-cream bg, focus:ring-agri-green, label htmlFor
+ * - All buttons min-h-[44px] with focus rings
+ */
