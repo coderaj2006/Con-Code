@@ -40,8 +40,8 @@ railway up
 
 In your platform dashboard, add:
 ```
-GEMINI_API_KEY=AIzaSyDLGyRSJpRC0EwVdZPfzMp2khOPZ3zeaPU
-OPENWEATHERMAP_API_KEY=797f5746989e5008d3d55b9da9ad998e
+GEMINI_API_KEY=<your-gemini-api-key>
+OPENWEATHERMAP_API_KEY=<your-openweather-api-key>
 JWT_SECRET_KEY=<generate-random-32-chars>
 VITE_API_URL=<your-backend-url-from-step-1>
 ```
