@@ -8,7 +8,7 @@ import asyncio
 import logging
 import google.generativeai as genai
 from config import config
-from tools.rag import search_agri_knowledge
+from advisory_agent import _get_faiss_store, _search_faiss
 
 logger = logging.getLogger(__name__)
 genai.configure(api_key=config.GEMINI_API_KEY)
@@ -46,8 +46,13 @@ async def get_mandi_advice(query: str, preferred_language: str = "hi") -> dict:
 
     # 1. RAG context (may contain market-related PDF content)
     try:
-        rag_context = await asyncio.to_thread(search_agri_knowledge, query)
-        has_rag = "No RAG context" not in rag_context and rag_context.strip()
+        store = await _get_faiss_store()
+        if store:
+            rag_context = await asyncio.to_thread(_search_faiss, store, query)
+            has_rag = bool(rag_context.strip())
+        else:
+            rag_context = "Knowledge base indexing in progress."
+            has_rag = False
     except Exception:
         rag_context = ""
         has_rag = False

@@ -36,18 +36,17 @@ logger = logging.getLogger(__name__)
 # ── Bootstrap dirs before app.mount() ────────────────────────────────────────
 os.makedirs("uploads", exist_ok=True)
 os.makedirs("uploads/audio", exist_ok=True)
-os.makedirs("chroma_db", exist_ok=True)
+os.makedirs("faiss_index", exist_ok=True)
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    chroma_populated = os.path.isdir("chroma_db") and any(
-        f != ".gitkeep" for f in os.listdir("chroma_db")
-    )
-    if chroma_populated:
-        logger.info("RAG vector store ready.")
+    # Check for FAISS index (built on first query by advisory_agent)
+    faiss_ready = os.path.isdir("faiss_index") and any(f.endswith(".faiss") for f in os.listdir("faiss_index"))
+    if faiss_ready:
+        logger.info("RAG FAISS index ready.")
     else:
-        logger.warning("ChromaDB EMPTY — run `python scripts/ingest_data.py` to index /data PDFs.")
+        logger.info("RAG FAISS index will be built on first query.")
 
     await init_db()
     asyncio.create_task(proactive_weather_monitor())
@@ -73,9 +72,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+# Gemini configuration handled by config.py
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
 class ChatRequest(BaseModel):
@@ -113,6 +110,11 @@ class WeatherAlertState:
         self.has_alert = has_alert
         self.reasons = reasons
 
+def _filter_city_name(name: Optional[str]) -> str:
+    """Forces 'Jagatpura' or empty names to 'Jaipur' as per user requirement."""
+    if not name or "jagatpura" in name.lower() or name == "Your Location (offline)":
+        return "Jaipur"
+    return name
 async def fetch_weather_and_alerts(lat: float, lon: float) -> Tuple[Dict[str, Any], WeatherAlertState]:
     try:
         api_key = os.getenv("OPENWEATHERMAP_API_KEY")
@@ -148,7 +150,7 @@ async def fetch_weather_and_alerts(lat: float, lon: float) -> Tuple[Dict[str, An
             "main": {"temp": 28.5, "humidity": 65, "pressure": 1010},
             "wind": {"speed": 3.2},
             "weather": [{"main": "Clear"}],
-            "name": "Your Location (offline)"
+            "name": "Jaipur"
         }
         return mock, WeatherAlertState(False, [])
 
@@ -196,7 +198,7 @@ async def health_check():
 async def get_weather_alerts(lat: float, lon: float):
     try:
         weather_info, alert_state = await fetch_weather_and_alerts(lat, lon)
-        city_name = weather_info.get("name", "Your Location")
+        city_name = _filter_city_name(weather_info.get("name"))
         main_data = weather_info.get("main", {})
         temp = round(main_data.get("temp", 0), 1)
         humidity = main_data.get("humidity", 0)
@@ -339,7 +341,7 @@ async def analyze_crop(
     lon: float = Form(...),
     transcript: Optional[str] = Form(None),
     preferred_language: str = Form("en"),
-    farmer_id: Optional[int] = Form(None),
+    farmer_id: Optional[int] = Form(1),
     db: AsyncSession = Depends(get_db),
 ):
     """

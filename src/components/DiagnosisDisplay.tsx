@@ -10,6 +10,7 @@ export interface AgentState {
 }
 
 export interface DiagnosisPayload {
+  disease_name?: string;
   diagnosis: string;
   confidence_score: number;
   sources: string[];
@@ -38,7 +39,9 @@ interface DiagnosisDisplayProps {
 export const DiagnosisDisplay: FC<DiagnosisDisplayProps> = ({ result, onClose, isSunlightMode }) => {
   const { payload, agent_state } = result;
 
-  const isError = result.diagnosis_status === 'ERROR' || result.diagnosis_status === 'NON_CROP';
+  const isError = result.diagnosis_status === 'ERROR'
+    || result.diagnosis_status === 'NON_CROP'
+    || result.diagnosis_status === 'RESCAN_REQUIRED';
 
   const urgencyColor =
     payload.urgency_level === 'High' ? 'bg-red-500'
@@ -65,11 +68,18 @@ export const DiagnosisDisplay: FC<DiagnosisDisplayProps> = ({ result, onClose, i
           ) : (
             <CheckCircle className={`w-5 h-5 ${isSunlightMode ? 'text-neon-agri' : 'text-agri-green'}`} />
           )}
-          <span className={`text-xs font-black uppercase tracking-widest ${
-            isError ? 'text-red-500' : (isSunlightMode ? 'text-neon-agri' : 'text-agri-green')
-          }`}>
-            {isError ? 'Scan Failed' : 'AI Diagnosis'}
-          </span>
+          <div>
+            <span className={`text-xs font-black uppercase tracking-widest ${
+              isError ? 'text-red-500' : (isSunlightMode ? 'text-neon-agri' : 'text-agri-green')
+            }`}>
+              {isError ? 'Scan Failed' : 'AI Diagnosis'}
+            </span>
+            {payload.disease_name && payload.disease_name !== 'N/A' && !isError && (
+              <p className={`text-base font-black mt-0.5 leading-tight ${isSunlightMode ? 'text-white' : 'text-gray-900'}`}>
+                {payload.disease_name}
+              </p>
+            )}
+          </div>
           {payload.urgency_level && !isError && (
             <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full text-white ${urgencyColor}`}>
               {payload.urgency_level} Risk

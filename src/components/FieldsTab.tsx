@@ -1,6 +1,6 @@
 import { FC, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Leaf, Plus, Droplets, Sun, Wind, ChevronRight, X } from 'lucide-react';
+import { Leaf, Plus, Droplets, Sun, ChevronRight, X } from 'lucide-react';
 
 interface Field {
   id: string;

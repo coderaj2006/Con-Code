@@ -28,3 +28,4 @@ python-jose[cryptography]
 passlib[bcrypt]
 faiss-cpu
 langdetect
+scipy

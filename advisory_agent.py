@@ -15,14 +15,10 @@ import logging
 import hashlib
 from typing import Optional
 
-import google.generativeai as genai
-from config import config
-
-# ── Weather agent — read-only dependency (DO NOT MODIFY weather_agent.py) ────
 from tools.weather_agent import get_weather_context
+from orchestrator.static_knowledge import AGRI_KNOWLEDGE
 
 logger = logging.getLogger(__name__)
-genai.configure(api_key=config.GEMINI_API_KEY)
 
 # ── FAISS vector store — lazy singleton ──────────────────────────────────────
 _faiss_store = None
@@ -30,9 +26,8 @@ _faiss_lock = asyncio.Lock()
 
 def _build_faiss_store():
     """
-    Builds a FAISS index from /data PDFs using GoogleGenerativeAIEmbeddings.
-    Falls back gracefully if PDFs are missing or embeddings fail.
-    Batches with delay to respect free-tier rate limits (100 req/min).
+    Builds a FAISS index from /data PDFs.
+    Falls back gracefully if API keys lack embedding permissions.
     """
     try:
         import time
@@ -45,19 +40,29 @@ def _build_faiss_store():
         data_dir = os.path.join(base_dir, "data")
         faiss_dir = os.path.join(base_dir, "faiss_index")
 
-        embeddings = GoogleGenerativeAIEmbeddings(
-            model="models/gemini-embedding-001",
-            google_api_key=config.GEMINI_API_KEY,
-        )
+        # Catch permission errors specifically for embeddings
+        try:
+            embeddings = GoogleGenerativeAIEmbeddings(
+                model="models/gemini-embedding-001",
+                google_api_key=config.GEMINI_API_KEY,
+            )
+        except Exception as e:
+            logger.warning(f"⚠️ Embedding model not supported by API Key. RAG search will be skipped: {e}")
+            return None
 
         # Load from saved index if it exists
         if os.path.exists(faiss_dir):
-            logger.info("Loading existing FAISS index from disk.")
-            return FAISS.load_local(faiss_dir, embeddings, allow_dangerous_deserialization=True)
+            try:
+                logger.info("Loading existing FAISS index from disk.")
+                return FAISS.load_local(faiss_dir, embeddings, allow_dangerous_deserialization=True)
+            except Exception as e:
+                logger.warning(f"Failed to load FAISS index: {e}")
+                return None
 
         # Build fresh from PDFs
         if not os.path.exists(data_dir):
-            logger.warning("No /data directory found. Advisory agent will use general knowledge.")
+            logger.warning("No /data directory found.")
+            return None
             return None
 
         pdf_files = [f for f in os.listdir(data_dir) if f.endswith(".pdf")]
@@ -131,11 +136,13 @@ async def _get_faiss_store():
 def _search_faiss(store, query: str, k: int = 4) -> str:
     """Returns top-k relevant chunks as a single context string."""
     try:
-        docs = store.similarity_search(query, k=k)
-        return "\n\n".join(d.page_content for d in docs)
+        if store:
+            docs = store.similarity_search(query, k=k)
+            return "\n\n".join(d.page_content for d in docs)
+        return AGRI_KNOWLEDGE
     except Exception as e:
-        logger.warning(f"FAISS search failed: {e}")
-        return ""
+        logger.warning(f"FAISS search failed, using static knowledge: {e}")
+        return AGRI_KNOWLEDGE
 
 
 def _detect_language(text: str) -> str:

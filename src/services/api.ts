@@ -37,6 +37,7 @@ export const analyzeCrop = async (
   formData.append('lon', lon.toString());
   formData.append('preferred_language', language);
   formData.append('transcript', '');
+  formData.append('farmer_id', '1');
 
   let response: Response;
   try {
