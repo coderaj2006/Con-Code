@@ -21,6 +21,7 @@ import { ProfileTab } from './components/ProfileTab';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuthScreen } from './components/AuthScreen';
 import { LocationProvider, useLocation } from './context/LocationContext';
+import { SchemeMitra } from './components/SchemeMitra';
 
 export interface ChatMessage {
   role: 'user' | 'ai';
@@ -41,7 +42,7 @@ function AppContent() {
   const [weatherData, setWeatherData] = useState<WeatherAlertResponse | null>(null);
   const [smartAlerts, setSmartAlerts] = useState<WeatherAlert[]>([]);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
+  const [_isRecording, setIsRecording] = useState(false);
   const [isUIActive, setIsUIActive] = useState(false);
   const [isSunlightMode, setIsSunlightMode] = useState(() => {
     return localStorage.getItem('sunlight-mode') === 'true';
@@ -188,14 +189,6 @@ function AppContent() {
     setIsUIActive(true); // Start recording immediately
   };
 
-  const getBCP47Language = (code: string) => {
-    const map: Record<string, string> = {
-      'en': 'en-US', 'hi': 'hi-IN', 'pa': 'pa-IN', 'gu': 'gu-IN', 'mr': 'mr-IN',
-      'kn': 'kn-IN', 'ml': 'ml-IN', 'ta': 'ta-IN', 'te': 'te-IN', 'bn': 'bn-IN', 'as': 'as-IN', 'bgc': 'hi-IN'
-    };
-    return map[code] || 'en-US';
-  };
-
   useEffect(() => {
     if (isUIActive) {
       speechService.start(
@@ -304,6 +297,14 @@ function AppContent() {
             <section>
               <ErrorBoundary>
                 <FieldsTab isSunlightMode={isSunlightMode} />
+              </ErrorBoundary>
+            </section>
+          )}
+
+          {activeTab === 'schemes' && (
+            <section>
+              <ErrorBoundary>
+                <SchemeMitra isSunlightMode={isSunlightMode} />
               </ErrorBoundary>
             </section>
           )}
