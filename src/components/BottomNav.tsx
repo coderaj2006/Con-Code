@@ -1,9 +1,9 @@
 // RESKIN ONLY — Logic untouched. UI layer updated per Agri-Tech spec.
 import { FC } from 'react';
-import { Home, Grid, FileText, User } from 'lucide-react';
+import { Home, Grid, FileText, User, ShieldCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-export type NavTab = 'home' | 'fields' | 'reports' | 'profile';
+export type NavTab = 'home' | 'fields' | 'reports' | 'profile' | 'schemes';
 
 interface BottomNavProps {
   isSunlightMode?: boolean;
@@ -14,10 +14,11 @@ interface BottomNavProps {
 /* INJECT LOGIC HERE — DO NOT REMOVE */
 export const BottomNav: FC<BottomNavProps> = ({ isSunlightMode, activeTab = 'home', onTabChange }) => {
   const tabs: { label: string; icon: any; id: NavTab }[] = [
-    { label: 'Home',    icon: Home,     id: 'home' },
-    { label: 'Fields',  icon: Grid,     id: 'fields' },
-    { label: 'Reports', icon: FileText, id: 'reports' },
-    { label: 'Profile', icon: User,     id: 'profile' },
+    { label: 'Home',    icon: Home,        id: 'home' },
+    { label: 'Fields',  icon: Grid,        id: 'fields' },
+    { label: 'Schemes', icon: ShieldCheck, id: 'schemes' },
+    { label: 'Reports', icon: FileText,    id: 'reports' },
+    { label: 'Profile', icon: User,        id: 'profile' },
   ];
 
   return (

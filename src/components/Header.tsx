@@ -5,8 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { LanguageBottomSheet } from './LanguageBottomSheet';
 import { useTranslation } from '../context/TranslationContext';
 import { useLocation } from '../context/LocationContext';
+import { API_BASE as API_BASE_URL } from '../config';
 
-const API_BASE_URL = (import.meta as any).env.VITE_API_URL || 'http://127.0.0.1:8002';
 
 interface HeaderProps {
   isSunlightMode: boolean;
@@ -41,9 +41,6 @@ export const Header: FC<HeaderProps> = ({ isSunlightMode, setIsSunlightMode }) =
       const res = await fetch(`${API_BASE_URL}/weather-by-city?city=${encodeURIComponent(cityInput.trim())}`);
       if (!res.ok) throw new Error('not found');
       const data = await res.json();
-      const geoRes = await fetch(
-        `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(cityInput.trim())}&limit=1&appid=`
-      );
       setManualCity(data.city || cityInput.trim(), coords.lat, coords.lon);
       const geocodeRes = await fetch(`${API_BASE_URL}/geocode?city=${encodeURIComponent(cityInput.trim())}`);
       if (geocodeRes.ok) {

@@ -1,10 +1,11 @@
 // LAYOUT FIX ONLY — State, effects, and handlers are untouched.
 import { FC, useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+<<<<<<< HEAD
 import { X, Send, BookOpen, Loader2, Volume2 } from 'lucide-react';
 import { useTranslation } from '../context/TranslationContext';
+import { API_BASE } from '../config';
 
-const API_BASE = (import.meta as any).env.VITE_API_URL || 'http://localhost:8002';
 
 interface ExpertMessage {
   role: 'user' | 'ai';

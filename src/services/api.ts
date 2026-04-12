@@ -1,6 +1,7 @@
-const API_BASE_URL = (import.meta as any).env.VITE_API_URL || 'http://127.0.0.1:8002';
-
+import { API_BASE } from '../config';
 import { OrchestratorResponse } from '../components/DiagnosisDisplay';
+
+const API_BASE_URL = API_BASE;
 
 export interface WeatherAlert {
   severity: 'CRITICAL' | 'WARNING' | 'INFO' | 'NORMAL';
@@ -37,14 +38,21 @@ export const analyzeCrop = async (
   formData.append('preferred_language', language);
   formData.append('transcript', '');
 
-  const response = await fetch(`${API_BASE_URL}/analyze`, {
-    method: 'POST',
-    headers: authHeaders,                  // JWT injected here
-    body: formData,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/analyze`, {
+      method: 'POST',
+      headers: authHeaders,                // JWT injected here
+      body: formData,
+    });
+  } catch (networkErr: any) {
+    // Catches ERR_CONNECTION_REFUSED and other network failures
+    throw new Error('Backend server not found. Please ensure the Kisaan AI server is running on port 8002.');
+  }
+
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err.message || 'Analysis failed');
+    throw new Error(err.message || 'Analysis failed. Please try again.');
   }
   return response.json();
 };
@@ -65,7 +73,7 @@ export const getWeatherByCity = async (city: string): Promise<WeatherAlertRespon
 // ── Text Chat ─────────────────────────────────────────────────────────────────
 export const sendMessage = async (
   text: string,
-  language: string,
+  _language: string,
   authHeaders: Record<string, string> = {},
 ): Promise<{ content: string; timestamp: string; follow_up_question: string | null; speech_url: string | null }> => {
   const response = await fetch(`${API_BASE_URL}/chat`, {
@@ -86,7 +94,7 @@ export const sendMessage = async (
 // ── Voice Chat ────────────────────────────────────────────────────────────────
 export const sendVoiceMessage = async (
   audioBlob: Blob,
-  language: string,
+  _language: string,
 ): Promise<{ transcript: string; content: string; timestamp: string; follow_up_question: string | null; speech_url: string | null }> => {
   const formData = new FormData();
   formData.append('audio', audioBlob, 'voice_query.wav');
