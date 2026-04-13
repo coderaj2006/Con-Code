@@ -13,10 +13,13 @@ import json
 import asyncio
 import logging
 import hashlib
+import google.generativeai as genai
 from typing import Optional
 
 from tools.weather_agent import get_weather_context
 from orchestrator.static_knowledge import AGRI_KNOWLEDGE
+from rag.chroma_store import query_knowledge
+from config import config
 
 logger = logging.getLogger(__name__)
 
@@ -186,14 +189,15 @@ async def get_advice(
     # 1. Language detection
     lang = preferred_language or _detect_language(query)
 
-    # 2. FAISS RAG search
+    # 2. ChromaDB RAG search
     rag_context = ""
     try:
-        store = await _get_faiss_store()
-        if store:
-            rag_context = await asyncio.to_thread(_search_faiss, store, query)
+        rag_context = await asyncio.to_thread(query_knowledge, query)
+        if not rag_context or not rag_context.strip():
+            rag_context = AGRI_KNOWLEDGE # Fallback
     except Exception as e:
         logger.warning(f"RAG search error: {e}")
+        rag_context = AGRI_KNOWLEDGE
 
     has_rag = bool(rag_context.strip())
 
@@ -218,35 +222,35 @@ async def get_advice(
         "ml": "Respond in Malayalam (മലയാളം).",
     }.get(lang, "Respond in simple Hindi.")
 
-    prompt = f"""You are a Compassionate Agri-Scientist helping Indian farmers.
-Your personality: warm, patient, encouraging — like a knowledgeable friend.
+    prompt = f"""You are a Compassionate Agri-Scientist helping Indian farmers in Rajasthan.
+Your personality: warm, patient, and practical — like a knowledgeable local friend.
 
-LANGUAGE RULE: {lang_instruction}
+LANGUAGE PROTOCOL: 
+- {lang_instruction}
+- Avoid all technical or scientific terms. Use simple, local vocabulary (Desi words) that a farmer in Rajasthan would understand in their selected language.
 
 CURRENT FIELD CONDITIONS:
 {weather_context}
 
-EXPERT KNOWLEDGE BASE:
-{rag_context if has_rag else "Use your general agricultural knowledge."}
+EXPERT ADVICE CONTEXT:
+{rag_context}
 
 FARMER'S QUESTION: {query}
 
-RESPONSE RULES (CRITICAL for mobile readability):
-1. Start with a warm 1-line acknowledgement of the farmer's concern
-2. Use bullet points (•) for any list of steps or symptoms
-3. Keep each bullet under 10 words
-4. Use simple headings like "🌱 Problem:", "💊 Treatment:", "⚠️ Warning:"
-5. Maximum 5 bullet points total
-6. End with one encouraging sentence
-7. Never use complex scientific names without a simple explanation
+RESPONSE RULES (STRICT):
+1. Keep the entire response between 3 to 5 sentences ONLY.
+2. Start with a warm greeting.
+3. Use simple headings: "🌱 Samsya:", "💊 Upay:", "⚠️ Savdhani:".
+4. Always end with a clear action starting with "Aapko yeh karna chahiye...".
+5. Use bullet points (•) for the Upay section.
 
 RETURN ONLY THIS JSON (no markdown fences):
 {{
-  "response": "Full formatted response in {lang}",
-  "audio_summary": "2-sentence plain summary for text-to-speech in {lang}",
+  "response": "Full Hinglish response (3-5 sentences)",
+  "audio_summary": "1-sentence Hinglish summary for TTS",
   "language_code": "{lang}",
   "source_type": "{'EXPERT_GUIDE' if has_rag else 'GENERAL_KNOWLEDGE'}",
-  "notification": "{'Based on your agricultural guides' if has_rag else 'Based on general knowledge'}"
+  "notification": "{'Expert advice sourced' if has_rag else 'General advice provided'}"
 }}"""
 
     try:

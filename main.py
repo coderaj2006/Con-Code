@@ -75,8 +75,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",   # Vite dev server
         "http://127.0.0.1:5173",
-        "http://localhost:8002",   # Backend self-calls
-        "http://127.0.0.1:8002",
+        "http://localhost:8000",   # Backend self-calls
+        "http://127.0.0.1:8000",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -113,7 +113,7 @@ def _generate_speech_sync(text: str, path: str, lang: str = "hi"):
 async def generate_speech(text: str, file_id: str, lang: str = "hi") -> str:
     path = os.path.join(AUDIO_DIR, f"{file_id}.mp3")
     await asyncio.to_thread(_generate_speech_sync, text, path, lang)
-    base = os.getenv("VITE_API_URL", "http://localhost:8002")
+    base = os.getenv("VITE_API_URL", "http://localhost:8000")
     return f"{base}/audio/{file_id}.mp3"
 
 class WeatherAlertState:
@@ -560,4 +560,4 @@ async def expert_chat(req: ExpertChatRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8002, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
